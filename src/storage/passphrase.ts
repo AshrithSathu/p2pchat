@@ -21,7 +21,7 @@ export function validateNewPassphrase(passphrase: string): string | null {
 
 export async function promptHidden(label: string): Promise<string> {
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
-    throw new Error('A TTY is required. Alternatively set P2PCHAT_PASSPHRASE.');
+    throw new Error('A TTY is required to enter the profile password.');
   }
 
   const input = process.stdin;

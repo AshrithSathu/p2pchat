@@ -12,6 +12,7 @@ import { join } from 'node:path';
 
 import Database from 'better-sqlite3';
 
+import { DEFAULT_PROFILE_NAME, normalizeProfileName } from '../core/profile.js';
 import {
   decryptRecord,
   deriveEncryptionKey,
@@ -22,6 +23,7 @@ import {
 const DATABASE_NAME = 'chat.db';
 const IDENTITY_CONTEXT = 'identity:private-key:v1';
 const SALT_KEY = 'encryption_salt';
+const PROFILE_NAME_KEY = 'profile_name';
 
 const SCHEMA = `
   CREATE TABLE IF NOT EXISTS metadata (
@@ -124,6 +126,7 @@ export interface LocalIdentity {
 export interface OpenStoreOptions {
   readonly directory: string;
   readonly passphrase: string;
+  readonly profileName?: string;
   readonly kdfOptions?: KdfOptions;
 }
 
@@ -191,6 +194,7 @@ export class LocalStore {
   readonly #encryptionKey: Buffer;
   readonly #encryptedPrivateKey: Buffer;
   readonly #identity: LocalIdentity;
+  readonly #profileName: string;
   #closed = false;
 
   private constructor(
@@ -198,11 +202,13 @@ export class LocalStore {
     encryptionKey: Buffer,
     identity: LocalIdentity,
     encryptedPrivateKey: Buffer,
+    profileName: string,
   ) {
     this.#database = database;
     this.#encryptionKey = encryptionKey;
     this.#identity = identity;
     this.#encryptedPrivateKey = encryptedPrivateKey;
+    this.#profileName = profileName;
   }
 
   public static async exists(directory: string): Promise<boolean> {
@@ -222,6 +228,9 @@ export class LocalStore {
   }
 
   public static async open(options: OpenStoreOptions): Promise<LocalStore> {
+    const profileName = normalizeProfileName(
+      options.profileName ?? DEFAULT_PROFILE_NAME,
+    );
     await mkdir(options.directory, { recursive: true, mode: 0o700 });
     await chmod(options.directory, 0o700);
 
@@ -240,6 +249,14 @@ export class LocalStore {
     const insertMetadata = database.prepare<[string, string]>(
       'INSERT INTO metadata (key, value) VALUES (?, ?)',
     );
+
+    const storedProfileName = selectMetadata.get(PROFILE_NAME_KEY)?.value;
+    if (storedProfileName !== undefined && storedProfileName !== profileName) {
+      database.close();
+      throw new Error(
+        `Profile database belongs to "${storedProfileName}", not "${profileName}".`,
+      );
+    }
 
     let saltValue = selectMetadata.get(SALT_KEY)?.value;
     if (saltValue === undefined) {
@@ -301,11 +318,16 @@ export class LocalStore {
       createPrivateKey({ key: privateKeyBytes, format: 'der', type: 'pkcs8' });
       privateKeyBytes.fill(0);
 
+      if (storedProfileName === undefined) {
+        insertMetadata.run(PROFILE_NAME_KEY, profileName);
+      }
+
       return new LocalStore(
         database,
         encryptionKey,
         identityDetails(row.public_key, row.created_at),
         Buffer.from(row.encrypted_private_key),
+        profileName,
       );
     } catch (error: unknown) {
       encryptionKey.fill(0);
@@ -324,6 +346,10 @@ export class LocalStore {
       ...this.#identity,
       publicKey: Buffer.from(this.#identity.publicKey),
     };
+  }
+
+  public get profileName(): string {
+    return this.#profileName;
   }
 
   public sign(payload: Uint8Array): Buffer {

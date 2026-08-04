@@ -32,6 +32,37 @@ afterEach(async () => {
 });
 
 describe('LocalStore', () => {
+  it('binds each database to one normalized local profile', async () => {
+    const directory = await temporaryDirectory();
+    const passphrase = 'alice profile database passphrase';
+    const alice = await LocalStore.open({
+      directory,
+      passphrase,
+      profileName: 'Alice',
+      kdfOptions: testKdfOptions,
+    });
+    expect(alice.profileName).toBe('alice');
+    alice.close();
+
+    const reopened = await LocalStore.open({
+      directory,
+      passphrase,
+      profileName: 'alice',
+      kdfOptions: testKdfOptions,
+    });
+    expect(reopened.profileName).toBe('alice');
+    reopened.close();
+
+    await expect(
+      LocalStore.open({
+        directory,
+        passphrase,
+        profileName: 'bob',
+        kdfOptions: testKdfOptions,
+      }),
+    ).rejects.toThrow('belongs to "alice"');
+  });
+
   it('persists one encrypted signing identity', async () => {
     const directory = await temporaryDirectory();
     const first = await LocalStore.open({

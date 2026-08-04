@@ -101,7 +101,7 @@ export class P2PService {
       },
       nodeInfo: {
         name: 'p2pchat',
-        version: '0.3.0',
+        version: '0.4.0',
       },
     });
 

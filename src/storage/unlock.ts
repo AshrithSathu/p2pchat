@@ -1,16 +1,20 @@
 import { LocalStore } from './local-store.js';
 import { promptHidden, validateNewPassphrase } from './passphrase.js';
 
-async function createPassphrase(): Promise<string> {
+async function createPassphrase(profileName: string): Promise<string> {
   for (;;) {
-    const passphrase = await promptHidden('Create local passphrase: ');
+    const passphrase = await promptHidden(
+      `Create password for profile "${profileName}": `,
+    );
     const validationError = validateNewPassphrase(passphrase);
     if (validationError !== null) {
       process.stderr.write(`${validationError}\n`);
       continue;
     }
 
-    const confirmation = await promptHidden('Confirm passphrase: ');
+    const confirmation = await promptHidden(
+      `Confirm password for profile "${profileName}": `,
+    );
     if (confirmation !== passphrase) {
       process.stderr.write('Passphrases do not match. Try again.\n');
       continue;
@@ -20,19 +24,18 @@ async function createPassphrase(): Promise<string> {
   }
 }
 
-export async function obtainPassphrase(directory: string): Promise<string> {
-  const environmentPassphrase = process.env['P2PCHAT_PASSPHRASE'];
-  if (environmentPassphrase !== undefined && environmentPassphrase.length > 0) {
-    return environmentPassphrase;
-  }
-
+export async function obtainPassphrase(
+  directory: string,
+  profileName = 'default',
+): Promise<string> {
   if (await LocalStore.exists(directory)) {
-    return await promptHidden('Unlock local chats: ');
+    return await promptHidden(`Unlock profile "${profileName}": `);
   }
 
   process.stdout.write(
-    'Your passphrase encrypts the local identity and message history.\n' +
+    `Creating local profile "${profileName}".\n` +
+      "Its password encrypts only this profile's identity and message history.\n" +
       'It cannot be recovered if you lose it.\n\n',
   );
-  return await createPassphrase();
+  return await createPassphrase(profileName);
 }

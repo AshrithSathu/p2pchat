@@ -1,4 +1,4 @@
-# p2pchat v0.3.0
+# p2pchat v0.4.0
 
 A private, local-first, peer-to-peer terminal chat written in strict TypeScript.
 It connects across ordinary NAT and firewall boundaries through an opaque
@@ -18,14 +18,14 @@ Until the repository is made public, authenticate GitHub CLI and download the
 release package:
 
 ```sh
-gh release download v0.3.0 \
+gh release download v0.4.0 \
   --repo AshrithSathu/p2pchat \
-  --pattern 'p2p-chat-0.3.0.tgz'
+  --pattern 'p2p-chat-0.4.0.tgz'
 corepack pnpm add --global \
   --allow-build=better-sqlite3 \
   --allow-build=@signalapp/libsignal-client \
-  ./p2p-chat-0.3.0.tgz
-p2pchat
+  ./p2p-chat-0.4.0.tgz
+p2pchat --profile alice
 ```
 
 The release also contains a SHA-256 checksum file. The package installs the
@@ -38,17 +38,28 @@ corepack pnpm install
 corepack pnpm dev
 ```
 
-The first launch asks you to create a local passphrase. It derives an encryption
-key and creates a persistent Ed25519 identity in the app data directory.
+Each profile has its own password, database, Ed25519 identity, Signal identity,
+ratchet state, peers, and message history. Opening a profile name for the first
+time creates it and asks for that profile's password:
 
-To test two peers on one computer, use separate data directories:
+```sh
+corepack pnpm dev -- --profile alice
+# Installed release:
+p2pchat --profile alice
+```
+
+Profile names are case-insensitive and may contain 1-32 letters, numbers, `_`,
+or `-`. The global `P2PCHAT_PASSPHRASE` override is intentionally unsupported;
+passwords are entered per profile through the hidden terminal prompt.
+
+To test two local users, open the same data root with different profile names:
 
 ```sh
 # Terminal 1
-P2PCHAT_DATA_DIR=/tmp/p2pchat-alice corepack pnpm dev
+P2PCHAT_DATA_DIR=/tmp/p2pchat-dev corepack pnpm dev -- --profile alice
 
 # Terminal 2
-P2PCHAT_DATA_DIR=/tmp/p2pchat-bob corepack pnpm dev
+P2PCHAT_DATA_DIR=/tmp/p2pchat-dev corepack pnpm dev -- --profile bob
 ```
 
 Then:
@@ -58,6 +69,9 @@ Then:
 3. Enter `/join <code>` in Terminal 2.
 4. Compare the safety number shown on both screens over a trusted channel.
 5. Type messages normally. `✓✓` means the peer acknowledged receipt.
+
+Running without `--profile` opens `default`. An existing pre-profile database is
+automatically retained as that default profile.
 
 Use `/help` for all commands, `/source` for the exact corresponding source,
 `/license` for licensing information, and `/quit` for a clean shutdown.

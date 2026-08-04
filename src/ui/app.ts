@@ -26,7 +26,7 @@ import {
   type LocalIdentity,
   type StoredMessage,
 } from '../storage/local-store.js';
-import { resolveDataDirectory } from '../storage/paths.js';
+import { resolveProfileDataDirectory } from '../storage/paths.js';
 import { obtainPassphrase } from '../storage/unlock.js';
 import { ansi } from './ansi.js';
 import { parseUiCommand, type UiAction } from './commands.js';
@@ -53,9 +53,9 @@ ${ansi.cyan('/source')}       Show the exact release source
 ${ansi.cyan('/license')}      Show licensing information
 ${ansi.cyan('/quit')}         Exit safely`;
 
-const SOURCE_URL = 'https://github.com/AshrithSathu/p2pchat/tree/v0.3.0';
+const SOURCE_URL = 'https://github.com/AshrithSathu/p2pchat/tree/v0.4.0';
 const LICENSE_URL =
-  'https://github.com/AshrithSathu/p2pchat/blob/v0.3.0/LICENSE';
+  'https://github.com/AshrithSathu/p2pchat/blob/v0.4.0/LICENSE';
 
 interface LayoutHandle {
   readonly root: Container;
@@ -81,9 +81,9 @@ function createLayout(
 
   header.addChild(
     new Text(
-      `${ansi.bold(ansi.cyan('p2pchat'))} ${ansi.dim('v0.3.0')}\n${ansi.dim(
+      `${ansi.bold(ansi.cyan('p2pchat'))} ${ansi.dim('v0.4.0')}\n${ansi.dim(
         'private • local-first • end-to-end encrypted',
-      )}\n${ansi.dim(`identity ${identity.fingerprint.slice(0, 24)}…`)}`,
+      )}\n${ansi.dim(`profile ${store.profileName} • identity ${identity.fingerprint.slice(0, 24)}…`)}`,
     ),
   );
 
@@ -285,7 +285,7 @@ function createLayout(
         return;
       case 'source':
         activity.setText(
-          `${ansi.bold('Corresponding source for p2pchat v0.3.0')}\n${SOURCE_URL}`,
+          `${ansi.bold('Corresponding source for p2pchat v0.4.0')}\n${SOURCE_URL}`,
         );
         break;
     }
@@ -339,10 +339,14 @@ function createLayout(
   };
 }
 
-export async function runTerminalApp(): Promise<void> {
-  const directory = resolveDataDirectory();
-  const passphrase = await obtainPassphrase(directory);
-  const store = await LocalStore.open({ directory, passphrase });
+export async function runTerminalApp(profileName = 'default'): Promise<void> {
+  const directory = await resolveProfileDataDirectory(profileName);
+  const passphrase = await obtainPassphrase(directory, profileName);
+  const store = await LocalStore.open({
+    directory,
+    passphrase,
+    profileName,
+  });
   const directNetwork: { service: P2PService | null } = { service: null };
   let relay: RelayService | null = null;
 
@@ -385,7 +389,7 @@ export async function runTerminalApp(): Promise<void> {
       return undefined;
     });
 
-    terminal.setTitle('p2pchat');
+    terminal.setTitle(`p2pchat — ${store.profileName}`);
     tui.start();
     await completion.promise;
     await layoutHandle.close();

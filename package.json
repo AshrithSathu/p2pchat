@@ -1,6 +1,6 @@
 {
   "name": "p2p-chat",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Private peer-to-peer terminal chat",
   "scripts": {
     "test": "vitest run src",

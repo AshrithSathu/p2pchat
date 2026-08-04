@@ -2,6 +2,24 @@
 
 All notable changes to p2pchat are documented here.
 
+## 0.4.0 - 2026-08-04
+
+### Added
+
+- Isolated local profiles selected with `--profile`, `--user`, or `-p`.
+- Automatic profile creation with a separate password, database, Ed25519
+  identity, Signal identity, ratchet state, peer list, and message history.
+- Profile identity binding inside SQLite to prevent opening a database under a
+  different local user name.
+- Active profile name in the terminal header and window title.
+
+### Changed
+
+- Removed the global `P2PCHAT_PASSPHRASE` environment override. Profile
+  passwords are entered through the hidden TTY prompt.
+- Preserved existing pre-profile databases as the `default` profile while new
+  profiles are stored under the shared data root's `profiles` directory.
+
 ## 0.3.0 - 2026-08-04
 
 ### Added

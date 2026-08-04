@@ -7,11 +7,12 @@ const HELP = `p2pchat — private peer-to-peer terminal chat
 
 Usage:
   p2pchat                 Open the terminal interface
+  p2pchat --profile NAME  Open or create an isolated local user
   p2pchat --help          Show this help
   p2pchat --version       Show the current version
 `;
 
-const VERSION = '0.3.0';
+const VERSION = '0.4.0';
 
 async function main(argv: readonly string[]): Promise<void> {
   const command = parseArguments(argv);
@@ -24,7 +25,7 @@ async function main(argv: readonly string[]): Promise<void> {
       process.stdout.write(`${VERSION}\n`);
       return;
     case 'app':
-      await runTerminalApp();
+      await runTerminalApp(command.profileName);
   }
 }
 
