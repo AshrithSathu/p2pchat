@@ -64,17 +64,20 @@ P2PCHAT_DATA_DIR=/tmp/p2pchat-dev corepack pnpm dev -- --profile bob
 
 Then:
 
-1. Enter `/new` in Terminal 1.
+1. Type `/` to open the command menu, then select `/new` in Terminal 1.
 2. Copy the short one-time Internet code.
-3. Enter `/join <code>` in Terminal 2.
+3. Select `/join` in Terminal 2 and paste the code.
 4. Compare the safety number shown on both screens over a trusted channel.
 5. Type messages normally. `✓✓` means the peer acknowledged receipt.
 
 Running without `--profile` opens `default`. An existing pre-profile database is
 automatically retained as that default profile.
 
-Use `/help` for all commands, `/source` for the exact corresponding source,
-`/license` for licensing information, and `/quit` for a clean shutdown.
+Type `/` to open autocomplete for every action. Continue typing to fuzzy-filter
+the list, use Up/Down to select, Tab to insert without running, Enter to run the
+selected action, and Escape to close the menu. Use `/help` for all commands,
+`/source` for the exact corresponding source, `/license` for licensing
+information, and `/quit` for a clean shutdown.
 
 `/new` uses the deployed Internet relay. `/new-local` retains the original
 direct TCP mode for peers on the same reachable LAN. A custom relay can be

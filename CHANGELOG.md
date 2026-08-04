@@ -2,6 +2,13 @@
 
 All notable changes to p2pchat are documented here.
 
+## Unreleased
+
+### Added
+
+- Pi-style slash-command autocomplete with live fuzzy filtering, keyboard
+  navigation, command hints, completion, and direct action execution.
+
 ## 0.4.0 - 2026-08-04
 
 ### Added

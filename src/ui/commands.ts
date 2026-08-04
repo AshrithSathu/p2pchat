@@ -1,3 +1,8 @@
+import {
+  CombinedAutocompleteProvider,
+  type SlashCommand,
+} from '@earendil-works/pi-tui';
+
 export type UiAction =
   | Readonly<{ kind: 'clear' }>
   | Readonly<{ kind: 'help' }>
@@ -8,6 +13,30 @@ export type UiAction =
   | Readonly<{ kind: 'license' }>
   | Readonly<{ kind: 'quit' }>
   | Readonly<{ kind: 'source' }>;
+
+export const UI_COMMAND_SUGGESTIONS = [
+  { name: 'new', description: 'Create an Internet chat' },
+  { name: 'new-local', description: 'Create a direct LAN chat' },
+  {
+    name: 'join',
+    description: 'Join using an invite code',
+    argumentHint: '<code>',
+  },
+  { name: 'help', description: 'Show all commands' },
+  { name: 'clear', description: 'Clear the activity panel' },
+  { name: 'source', description: 'Show the exact release source' },
+  { name: 'license', description: 'Show licensing information' },
+  { name: 'quit', description: 'Exit safely' },
+] as const satisfies readonly SlashCommand[];
+
+export function createUiAutocompleteProvider(
+  basePath: string,
+): CombinedAutocompleteProvider {
+  return new CombinedAutocompleteProvider(
+    [...UI_COMMAND_SUGGESTIONS],
+    basePath,
+  );
+}
 
 export function parseUiCommand(input: string): UiAction | null {
   const value = input.trim();

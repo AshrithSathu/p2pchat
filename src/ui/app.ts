@@ -29,7 +29,12 @@ import {
 import { resolveProfileDataDirectory } from '../storage/paths.js';
 import { obtainPassphrase } from '../storage/unlock.js';
 import { ansi } from './ansi.js';
-import { parseUiCommand, type UiAction } from './commands.js';
+import {
+  createUiAutocompleteProvider,
+  parseUiCommand,
+  UI_COMMAND_SUGGESTIONS,
+  type UiAction,
+} from './commands.js';
 
 const selectListTheme: SelectListTheme = {
   selectedPrefix: ansi.cyan,
@@ -73,7 +78,11 @@ function createLayout(
   const root = new Container();
   const header = new Box(1, 1);
   const activity = new Text('', 1, 0);
-  const editor = new Editor(tui, editorTheme, { paddingX: 1 });
+  const editor = new Editor(tui, editorTheme, {
+    paddingX: 1,
+    autocompleteMaxVisible: UI_COMMAND_SUGGESTIONS.length,
+  });
+  editor.setAutocompleteProvider(createUiAutocompleteProvider(process.cwd()));
   let currentSession: AuthenticatedSession | null = null;
   let currentChat: ChatSession | null = null;
   let pendingInvite: InviteHandle | null = null;
@@ -322,7 +331,7 @@ function createLayout(
     new Text(
       `${ansi.dim('Enter')} submit   ${ansi.dim('Shift+Enter')} newline   ${ansi.dim(
         'Ctrl+C',
-      )} quit   ${ansi.dim('/help')} commands`,
+      )} quit   ${ansi.dim('/')} actions`,
       1,
       0,
     ),
