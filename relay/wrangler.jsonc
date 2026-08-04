@@ -1,0 +1,30 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "p2pchat-relay",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-04",
+  "compatibility_flags": ["nodejs_compat"],
+  "routes": [
+    {
+      "pattern": "p2pchat-relay.sathuashrith.com",
+      "custom_domain": true,
+    },
+  ],
+  "durable_objects": {
+    "bindings": [{ "name": "RELAY_ROOMS", "class_name": "RelayRoom" }],
+  },
+  "exports": {
+    "RelayRoom": {
+      "type": "durable-object",
+      "storage": "sqlite",
+    },
+  },
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 0.1,
+    "traces": {
+      "enabled": true,
+      "head_sampling_rate": 0.01,
+    },
+  },
+}

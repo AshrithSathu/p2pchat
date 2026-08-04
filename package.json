@@ -1,0 +1,75 @@
+{
+  "name": "p2p-chat",
+  "version": "0.3.0",
+  "description": "Private peer-to-peer terminal chat",
+  "scripts": {
+    "test": "vitest run src",
+    "dev": "tsx src/cli.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/cli.js",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --max-warnings=0",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test:watch": "vitest src",
+    "check:client": "pnpm typecheck && pnpm lint && pnpm test && pnpm run format:check",
+    "relay:dev": "pnpm --dir relay dev",
+    "relay:test": "pnpm --dir relay test",
+    "relay:check": "pnpm --dir relay check",
+    "relay:deploy": "pnpm --dir relay deploy",
+    "check": "pnpm check:client && pnpm relay:check"
+  },
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "private": true,
+  "packageManager": "pnpm@11.4.0",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/node": "^26.1.2",
+    "@vitest/coverage-v8": "^4.1.10",
+    "eslint": "^10.8.0",
+    "prettier": "^3.9.6",
+    "tsx": "^4.23.5",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.65.0",
+    "vitest": "^4.1.10"
+  },
+  "bin": {
+    "p2pchat": "dist/cli.js"
+  },
+  "dependencies": {
+    "@chainsafe/libp2p-noise": "^17.0.0",
+    "@chainsafe/libp2p-yamux": "8.0.1",
+    "@earendil-works/pi-tui": "^0.83.0",
+    "@libp2p/identify": "^4.1.12",
+    "@libp2p/interface": "^3.2.5",
+    "@libp2p/tcp": "^11.0.26",
+    "@libp2p/utils": "^7.3.2",
+    "@multiformats/multiaddr": "^13.0.3",
+    "@signalapp/libsignal-client": "0.99.3",
+    "better-sqlite3": "^12.10.0",
+    "libp2p": "^3.3.8",
+    "zod": "^4.4.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AshrithSathu/p2pchat.git"
+  },
+  "homepage": "https://github.com/AshrithSathu/p2pchat#readme",
+  "bugs": {
+    "url": "https://github.com/AshrithSathu/p2pchat/issues"
+  },
+  "files": [
+    "dist",
+    "src",
+    "LICENSE",
+    "README.md",
+    "tsconfig.build.json",
+    "CHANGELOG.md",
+    "SECURITY.md"
+  ]
+}
