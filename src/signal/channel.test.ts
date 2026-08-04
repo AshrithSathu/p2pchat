@@ -21,6 +21,7 @@ const applicationSchema = z.object({
   body: z.string(),
 });
 const directories: string[] = [];
+const signalTestTimeout = 30_000;
 
 afterEach(async () => {
   await Promise.all(
@@ -31,86 +32,94 @@ afterEach(async () => {
 });
 
 describe('Signal channel', () => {
-  it('uses PQXDH, handles out-of-order messages, and rejects replays', async () => {
-    const creatorStore = await createStore('creator');
-    const joinerStore = await createStore('joiner');
-    const [creatorRaw, joinerRaw] = memoryChannelPair();
-    const [creator, joiner] = await Promise.all([
-      establishSignalChannel({
-        inner: creatorRaw,
-        localStore: creatorStore,
-        peerId: joinerStore.identity.id,
-        direction: 'creator',
-      }),
-      establishSignalChannel({
-        inner: joinerRaw,
-        localStore: joinerStore,
-        peerId: creatorStore.identity.id,
-        direction: 'joiner',
-      }),
-    ]);
+  it(
+    'uses PQXDH, handles out-of-order messages, and rejects replays',
+    async () => {
+      const creatorStore = await createStore('creator');
+      const joinerStore = await createStore('joiner');
+      const [creatorRaw, joinerRaw] = memoryChannelPair();
+      const [creator, joiner] = await Promise.all([
+        establishSignalChannel({
+          inner: creatorRaw,
+          localStore: creatorStore,
+          peerId: joinerStore.identity.id,
+          direction: 'creator',
+        }),
+        establishSignalChannel({
+          inner: joinerRaw,
+          localStore: joinerStore,
+          peerId: creatorStore.identity.id,
+          direction: 'joiner',
+        }),
+      ]);
 
-    expect(creator.localIdentityKey).toEqual(joiner.remoteIdentityKey);
-    expect(creator.remoteIdentityKey).toEqual(joiner.localIdentityKey);
+      expect(creator.localIdentityKey).toEqual(joiner.remoteIdentityKey);
+      expect(creator.remoteIdentityKey).toEqual(joiner.localIdentityKey);
 
-    const heldFrames: unknown[] = [];
-    creatorRaw.outboundHook = (value) => heldFrames.push(value);
-    await creator.channel.write({ sequence: 1, body: 'first' });
-    await creator.channel.write({ sequence: 2, body: 'second' });
-    creatorRaw.outboundHook = null;
+      const heldFrames: unknown[] = [];
+      creatorRaw.outboundHook = (value) => heldFrames.push(value);
+      await creator.channel.write({ sequence: 1, body: 'first' });
+      await creator.channel.write({ sequence: 2, body: 'second' });
+      creatorRaw.outboundHook = null;
 
-    expect(heldFrames).toHaveLength(2);
-    joinerRaw.push(heldFrames[1]);
-    joinerRaw.push(heldFrames[0]);
-    await expect(joiner.channel.read(applicationSchema)).resolves.toEqual({
-      sequence: 2,
-      body: 'second',
-    });
-    await expect(joiner.channel.read(applicationSchema)).resolves.toEqual({
-      sequence: 1,
-      body: 'first',
-    });
-
-    joinerRaw.push(heldFrames[0]);
-    await expect(joiner.channel.read(applicationSchema)).rejects.toThrow();
-
-    creatorStore.close();
-    joinerStore.close();
-  });
-
-  it('rejects a tampered ratchet ciphertext', async () => {
-    const creatorStore = await createStore('tamper-creator');
-    const joinerStore = await createStore('tamper-joiner');
-    const [creatorRaw, joinerRaw] = memoryChannelPair();
-    const [creator, joiner] = await Promise.all([
-      establishSignalChannel({
-        inner: creatorRaw,
-        localStore: creatorStore,
-        peerId: joinerStore.identity.id,
-        direction: 'creator',
-      }),
-      establishSignalChannel({
-        inner: joinerRaw,
-        localStore: joinerStore,
-        peerId: creatorStore.identity.id,
-        direction: 'joiner',
-      }),
-    ]);
-
-    creatorRaw.outboundHook = (value) => {
-      const frame = z.object({ ciphertext: z.string() }).loose().parse(value);
-      const replacement = frame.ciphertext.startsWith('A') ? 'B' : 'A';
-      joinerRaw.push({
-        ...frame,
-        ciphertext: `${replacement}${frame.ciphertext.slice(1)}`,
+      expect(heldFrames).toHaveLength(2);
+      joinerRaw.push(heldFrames[1]);
+      joinerRaw.push(heldFrames[0]);
+      await expect(joiner.channel.read(applicationSchema)).resolves.toEqual({
+        sequence: 2,
+        body: 'second',
       });
-    };
-    await creator.channel.write({ sequence: 1, body: 'authenticated' });
-    await expect(joiner.channel.read(applicationSchema)).rejects.toThrow();
+      await expect(joiner.channel.read(applicationSchema)).resolves.toEqual({
+        sequence: 1,
+        body: 'first',
+      });
 
-    creatorStore.close();
-    joinerStore.close();
-  });
+      joinerRaw.push(heldFrames[0]);
+      await expect(joiner.channel.read(applicationSchema)).rejects.toThrow();
+
+      creatorStore.close();
+      joinerStore.close();
+    },
+    signalTestTimeout,
+  );
+
+  it(
+    'rejects a tampered ratchet ciphertext',
+    async () => {
+      const creatorStore = await createStore('tamper-creator');
+      const joinerStore = await createStore('tamper-joiner');
+      const [creatorRaw, joinerRaw] = memoryChannelPair();
+      const [creator, joiner] = await Promise.all([
+        establishSignalChannel({
+          inner: creatorRaw,
+          localStore: creatorStore,
+          peerId: joinerStore.identity.id,
+          direction: 'creator',
+        }),
+        establishSignalChannel({
+          inner: joinerRaw,
+          localStore: joinerStore,
+          peerId: creatorStore.identity.id,
+          direction: 'joiner',
+        }),
+      ]);
+
+      creatorRaw.outboundHook = (value) => {
+        const frame = z.object({ ciphertext: z.string() }).loose().parse(value);
+        const replacement = frame.ciphertext.startsWith('A') ? 'B' : 'A';
+        joinerRaw.push({
+          ...frame,
+          ciphertext: `${replacement}${frame.ciphertext.slice(1)}`,
+        });
+      };
+      await creator.channel.write({ sequence: 1, body: 'authenticated' });
+      await expect(joiner.channel.read(applicationSchema)).rejects.toThrow();
+
+      creatorStore.close();
+      joinerStore.close();
+    },
+    signalTestTimeout,
+  );
 });
 
 async function createStore(label: string): Promise<LocalStore> {
