@@ -1,8 +1,8 @@
 # p2pchat
 
-[![npm version](https://img.shields.io/npm/v/p2pchat.svg)](https://www.npmjs.com/package/p2pchat)
+[![npm version](https://img.shields.io/npm/v/@ashrithsathu/p2pchat.svg)](https://www.npmjs.com/package/@ashrithsathu/p2pchat)
 [![CI](https://github.com/AshrithSathu/p2pchat/actions/workflows/ci.yml/badge.svg)](https://github.com/AshrithSathu/p2pchat/actions/workflows/ci.yml)
-[![license](https://img.shields.io/npm/l/p2pchat.svg)](LICENSE)
+[![license](https://img.shields.io/npm/l/@ashrithsathu/p2pchat.svg)](LICENSE)
 
 Fast, local-first, end-to-end encrypted terminal chat written in strict
 TypeScript. Peers can connect across ordinary NAT and firewall boundaries using
@@ -22,13 +22,13 @@ corepack enable
 corepack pnpm add --global \
   --allow-build=better-sqlite3 \
   --allow-build=@signalapp/libsignal-client \
-  p2pchat
+  @ashrithsathu/p2pchat
 ```
 
 The standard npm client is also supported:
 
 ```sh
-npm install --global p2pchat
+npm install --global @ashrithsathu/p2pchat
 ```
 
 Start or create a local profile:

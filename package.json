@@ -1,5 +1,5 @@
 {
-  "name": "p2pchat",
+  "name": "@ashrithsathu/p2pchat",
   "version": "0.5.0",
   "description": "End-to-end encrypted, local-first terminal chat",
   "scripts": {

@@ -8,7 +8,7 @@ All notable changes to p2pchat are documented here.
 
 - Pi-style slash-command autocomplete with live fuzzy filtering, keyboard
   navigation, command hints, completion, and direct action execution.
-- Public npm distribution as the unscoped `p2pchat` command-line package.
+- Public npm distribution as the `@ashrithsathu/p2pchat` command-line package.
 - Public installation, architecture, security, development, and contribution
   documentation.
 
