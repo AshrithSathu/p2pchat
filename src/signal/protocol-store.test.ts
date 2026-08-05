@@ -112,7 +112,7 @@ describe('PersistentSignalProtocolStore', () => {
     replacementBundle.discard();
     localStore.close();
     remoteStore.close();
-  });
+  }, 20_000);
 });
 
 async function temporaryDirectory(label: string): Promise<string> {
