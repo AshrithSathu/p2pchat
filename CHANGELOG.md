@@ -21,6 +21,8 @@ All notable changes to p2pchat are documented here.
 
 - Reworked the landing page into a typography-led editorial terminal design
   with a matching social preview image.
+- Bounded and centered the desktop landing-page poster so ultrawide and tall
+  screens preserve the intended composition instead of stretching its gaps.
 - Aligned the documented Node.js requirement with the TUI runtime dependency:
   Node.js 22.19 or newer.
 - Hardened CI with cancellation of superseded runs, per-job timeouts, manual
