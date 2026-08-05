@@ -6,7 +6,8 @@ Only the latest tagged release is supported with security fixes.
 
 | Version | Supported |
 | ------- | --------- |
-| 0.4.x   | Yes       |
+| 0.5.x   | Yes       |
+| 0.4.x   | No        |
 | Earlier | No        |
 
 ## Reporting a vulnerability
@@ -20,7 +21,7 @@ chat messages, invite codes, passphrases, identities, or private keys.
 
 p2pchat has automated protocol, tamper, replay, persistence, direct-network,
 and deployed-relay tests. It has not received an independent cryptographic or
-application security audit. Treat v0.4.0 as a production-hardened release
+application security audit. Treat v0.5.0 as a production-hardened release
 candidate, not an audited security product.
 
 Cloudflare can observe connection metadata, including IP addresses, timing,

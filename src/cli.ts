@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { parseArguments } from './core/arguments.js';
+import { APP_VERSION } from './core/version.js';
 import { runTerminalApp } from './ui/app.js';
 
 const HELP = `p2pchat — private peer-to-peer terminal chat
@@ -12,8 +13,6 @@ Usage:
   p2pchat --version       Show the current version
 `;
 
-const VERSION = '0.4.0';
-
 async function main(argv: readonly string[]): Promise<void> {
   const command = parseArguments(argv);
 
@@ -22,7 +21,7 @@ async function main(argv: readonly string[]): Promise<void> {
       process.stdout.write(HELP);
       return;
     case 'version':
-      process.stdout.write(`${VERSION}\n`);
+      process.stdout.write(`${APP_VERSION}\n`);
       return;
     case 'app':
       await runTerminalApp(command.profileName);

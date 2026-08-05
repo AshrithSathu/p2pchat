@@ -1,5 +1,7 @@
 import {
   CombinedAutocompleteProvider,
+  Key,
+  matchesKey,
   type SlashCommand,
 } from '@earendil-works/pi-tui';
 
@@ -36,6 +38,19 @@ export function createUiAutocompleteProvider(
     [...UI_COMMAND_SUGGESTIONS],
     basePath,
   );
+}
+
+export function isQuitSubmission(
+  input: string,
+  terminalInput: string,
+): boolean {
+  const isEnter =
+    terminalInput === '\r' ||
+    terminalInput === '\n' ||
+    matchesKey(terminalInput, Key.enter) ||
+    matchesKey(terminalInput, Key.return);
+
+  return isEnter && parseUiCommand(input)?.kind === 'quit';
 }
 
 export function parseUiCommand(input: string): UiAction | null {

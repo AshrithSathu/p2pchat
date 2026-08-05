@@ -7,6 +7,7 @@ import { multiaddr } from '@multiformats/multiaddr';
 import { createLibp2p, type Libp2p } from 'libp2p';
 
 import type { LocalStore } from '../storage/local-store.js';
+import { APP_VERSION } from '../core/version.js';
 import type { JsonChannel } from './channel.js';
 import {
   createAcceptMessage,
@@ -101,7 +102,7 @@ export class P2PService {
       },
       nodeInfo: {
         name: 'p2pchat',
-        version: '0.4.0',
+        version: APP_VERSION,
       },
     });
 

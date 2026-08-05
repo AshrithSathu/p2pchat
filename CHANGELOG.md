@@ -2,12 +2,27 @@
 
 All notable changes to p2pchat are documented here.
 
-## Unreleased
+## 0.5.0 - 2026-08-05
 
 ### Added
 
 - Pi-style slash-command autocomplete with live fuzzy filtering, keyboard
   navigation, command hints, completion, and direct action execution.
+- Public npm distribution as the unscoped `p2pchat` command-line package.
+- Public installation, architecture, security, development, and contribution
+  documentation.
+
+### Changed
+
+- Centralized the runtime version and verify it against the npm package version.
+- Reduced the published npm tarball to runtime output and essential project
+  documentation.
+
+### Fixed
+
+- `/quit` and `/exit` now close cleanly in terminals that encode Enter as a raw
+  line feed while the autocomplete menu is active.
+- Corrected `pnpm dev` profile examples for pnpm 11 argument forwarding.
 
 ## 0.4.0 - 2026-08-04
 

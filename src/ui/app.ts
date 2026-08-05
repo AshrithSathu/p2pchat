@@ -13,6 +13,7 @@ import {
 } from '@earendil-works/pi-tui';
 
 import { ChatSession, type ChatEvent } from '../chat/session.js';
+import { APP_TAG, APP_VERSION } from '../core/version.js';
 import {
   P2PService,
   type AuthenticatedSession,
@@ -31,6 +32,7 @@ import { obtainPassphrase } from '../storage/unlock.js';
 import { ansi } from './ansi.js';
 import {
   createUiAutocompleteProvider,
+  isQuitSubmission,
   parseUiCommand,
   UI_COMMAND_SUGGESTIONS,
   type UiAction,
@@ -58,9 +60,8 @@ ${ansi.cyan('/source')}       Show the exact release source
 ${ansi.cyan('/license')}      Show licensing information
 ${ansi.cyan('/quit')}         Exit safely`;
 
-const SOURCE_URL = 'https://github.com/AshrithSathu/p2pchat/tree/v0.4.0';
-const LICENSE_URL =
-  'https://github.com/AshrithSathu/p2pchat/blob/v0.4.0/LICENSE';
+const SOURCE_URL = `https://github.com/AshrithSathu/p2pchat/tree/${APP_TAG}`;
+const LICENSE_URL = `https://github.com/AshrithSathu/p2pchat/blob/${APP_TAG}/LICENSE`;
 
 interface LayoutHandle {
   readonly root: Container;
@@ -83,6 +84,13 @@ function createLayout(
     autocompleteMaxVisible: UI_COMMAND_SUGGESTIONS.length,
   });
   editor.setAutocompleteProvider(createUiAutocompleteProvider(process.cwd()));
+  const removeQuitInputListener = tui.addInputListener((data) => {
+    if (isQuitSubmission(editor.getText(), data)) {
+      finish();
+      return { consume: true };
+    }
+    return undefined;
+  });
   let currentSession: AuthenticatedSession | null = null;
   let currentChat: ChatSession | null = null;
   let pendingInvite: InviteHandle | null = null;
@@ -90,7 +98,7 @@ function createLayout(
 
   header.addChild(
     new Text(
-      `${ansi.bold(ansi.cyan('p2pchat'))} ${ansi.dim('v0.4.0')}\n${ansi.dim(
+      `${ansi.bold(ansi.cyan('p2pchat'))} ${ansi.dim(`v${APP_VERSION}`)}\n${ansi.dim(
         'private • local-first • end-to-end encrypted',
       )}\n${ansi.dim(`profile ${store.profileName} • identity ${identity.fingerprint.slice(0, 24)}…`)}`,
     ),
@@ -294,7 +302,7 @@ function createLayout(
         return;
       case 'source':
         activity.setText(
-          `${ansi.bold('Corresponding source for p2pchat v0.4.0')}\n${SOURCE_URL}`,
+          `${ansi.bold(`Corresponding source for p2pchat v${APP_VERSION}`)}\n${SOURCE_URL}`,
         );
         break;
     }
@@ -342,6 +350,7 @@ function createLayout(
   return {
     root,
     close: async () => {
+      removeQuitInputListener();
       pendingInvite?.cancel();
       await currentChat?.close();
     },

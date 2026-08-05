@@ -1,163 +1,173 @@
-# p2pchat v0.4.0
+# p2pchat
 
-A private, local-first, peer-to-peer terminal chat written in strict TypeScript.
-It connects across ordinary NAT and firewall boundaries through an opaque
-Cloudflare WebSocket relay while keeping identities, keys, and messages
-end-to-end encrypted.
+[![npm version](https://img.shields.io/npm/v/p2pchat.svg)](https://www.npmjs.com/package/p2pchat)
+[![CI](https://github.com/AshrithSathu/p2pchat/actions/workflows/ci.yml/badge.svg)](https://github.com/AshrithSathu/p2pchat/actions/workflows/ci.yml)
+[![license](https://img.shields.io/npm/l/p2pchat.svg)](LICENSE)
 
-## Requirements
+Fast, local-first, end-to-end encrypted terminal chat written in strict
+TypeScript. Peers can connect across ordinary NAT and firewall boundaries using
+short-lived invite codes and an opaque Cloudflare WebSocket relay.
 
-- Node.js 22 or newer
-- Corepack (included with standard Node.js installations)
+> [!IMPORTANT]
+> p2pchat is production-hardened but has not received an independent security
+> audit. Read the [security model](#security-model) and [security policy](SECURITY.md)
+> before using it for sensitive conversations.
 
-Dependencies are managed only through the pinned `pnpm@11.4.0` package manager.
+## Install
 
-## Install the private release
-
-Until the repository is made public, authenticate GitHub CLI and download the
-release package:
+Requirements: Node.js 22 or newer and Corepack.
 
 ```sh
-gh release download v0.4.0 \
-  --repo AshrithSathu/p2pchat \
-  --pattern 'p2p-chat-0.4.0.tgz'
+corepack enable
 corepack pnpm add --global \
   --allow-build=better-sqlite3 \
   --allow-build=@signalapp/libsignal-client \
-  ./p2p-chat-0.4.0.tgz
+  p2pchat
+```
+
+The standard npm client is also supported:
+
+```sh
+npm install --global p2pchat
+```
+
+Start or create a local profile:
+
+```sh
 p2pchat --profile alice
 ```
 
-The release also contains a SHA-256 checksum file. The package installs the
-correct prebuilt libsignal and SQLite native libraries for the current system.
+Each profile has its own password, database with encrypted sensitive records,
+Ed25519 identity, Signal identity, ratchet state, peers, and message history.
+The password is requested through a hidden terminal prompt and is never accepted
+through an environment variable.
 
-## Run it
+## Start a chat
+
+On the first device:
+
+1. Run `p2pchat --profile alice`.
+2. Type `/` and select `/new`.
+3. Send the displayed one-time code to the other person over a private channel.
+
+On the second device:
+
+1. Run `p2pchat --profile bob`.
+2. Select `/join`, paste the invite code, and press Enter.
+3. Compare the safety number shown on both screens using a trusted channel.
+
+Messages can be typed normally after authentication. `✓✓` means the peer
+acknowledged receipt.
+
+## Commands
+
+| Command        | Action                                         |
+| -------------- | ---------------------------------------------- |
+| `/new`         | Create a short-lived Internet invitation       |
+| `/new-local`   | Create a direct invitation for reachable peers |
+| `/join <code>` | Join an Internet or direct invitation          |
+| `/clear`       | Clear the activity panel                       |
+| `/help`        | Show command help                              |
+| `/source`      | Show source corresponding to this version      |
+| `/license`     | Show licensing information                     |
+| `/quit`        | Close connections and exit safely              |
+
+Typing `/` opens Pi-style command autocomplete. Continue typing to fuzzy-filter,
+use Up/Down to select, Tab to insert without running, Enter to execute, and
+Escape to close the menu. `/exit` is an alias for `/quit`.
+
+## Local profiles
+
+Profile names are case-insensitive and contain 1-32 letters, numbers, `_`, or
+`-`. Running without `--profile` opens `default`.
 
 ```sh
-corepack pnpm install
-corepack pnpm dev
-```
-
-Each profile has its own password, database, Ed25519 identity, Signal identity,
-ratchet state, peers, and message history. Opening a profile name for the first
-time creates it and asks for that profile's password:
-
-```sh
-corepack pnpm dev -- --profile alice
-# Installed release:
 p2pchat --profile alice
+p2pchat --profile bob
 ```
 
-Profile names are case-insensitive and may contain 1-32 letters, numbers, `_`,
-or `-`. The global `P2PCHAT_PASSPHRASE` override is intentionally unsupported;
-passwords are entered per profile through the hidden terminal prompt.
+Profiles are stored separately under the platform data directory:
 
-To test two local users, open the same data root with different profile names:
+| Platform | Default location                                                                     |
+| -------- | ------------------------------------------------------------------------------------ |
+| macOS    | `~/Library/Application Support/p2pchat/profiles/<name>`                              |
+| Linux    | `~/.local/share/p2pchat/profiles/<name>` or `$XDG_DATA_HOME/p2pchat/profiles/<name>` |
+| Windows  | `%LOCALAPPDATA%\p2pchat\profiles\<name>`                                             |
+
+Set `P2PCHAT_DATA_DIR` to override the shared data root. Existing databases from
+versions before profiles remain available through the `default` profile.
+
+## How connections work
+
+- `/new` uses the production relay at
+  `https://p2pchat-relay.sathuashrith.com`.
+- The invite code contains a high-entropy secret used to authenticate the
+  rendezvous and establish encrypted transport keys.
+- Signal PQXDH establishes the application session, and every message is
+  protected by the Double Ratchet.
+- The relay forwards opaque ciphertext and does not store chat messages.
+- `/new-local` keeps the original direct TCP/libp2p mode for peers that can
+  reach one another without the relay.
+
+Use `P2PCHAT_RELAY_URL=https://relay.example.com` to select a compatible
+self-hosted relay.
+
+## Security model
+
+- The exact-pinned `@signalapp/libsignal-client@0.99.3` package provides PQXDH
+  session establishment and Double Ratchet message encryption.
+- Signal identity keys are pinned to authenticated Ed25519 peer identities. A
+  changed identity is rejected, and the safety number covers both identity
+  systems.
+- Direct connections use Noise in addition to the inner Signal layer.
+- Relay connections use an authenticated Ed25519/X25519 handshake and
+  directional AES-256-GCM transport keys around the inner Signal layer.
+- Message bodies, private identities, prekeys, trusted peer state, and ratchet
+  sessions are encrypted in SQLite using AES-256-GCM. The local key is derived
+  from the profile password with scrypt.
+- Profile directories use owner-only permissions on supported operating
+  systems, and SQLite secure deletion is enabled.
+- Received messages are stripped of terminal control and bidirectional override
+  characters before display.
+
+The database is not fully opaque: timestamps, delivery state, sequence numbers,
+public keys, and peer identifiers remain visible. Cloudflare can observe IP
+addresses, timing, room locators, and ciphertext sizes. A compromised unlocked
+device, administrator access, malware, backups, filesystem snapshots, or an
+exposed/weak profile password can defeat local protection.
+
+This project is not affiliated with Signal. Signal documents external use of
+libsignal as unsupported, so the exact dependency version is intentionally
+pinned.
+
+## Development
 
 ```sh
-# Terminal 1
-P2PCHAT_DATA_DIR=/tmp/p2pchat-dev corepack pnpm dev -- --profile alice
-
-# Terminal 2
-P2PCHAT_DATA_DIR=/tmp/p2pchat-dev corepack pnpm dev -- --profile bob
+git clone https://github.com/AshrithSathu/p2pchat.git
+cd p2pchat
+corepack enable
+corepack pnpm install --frozen-lockfile
+corepack pnpm dev --profile alice
 ```
 
-Then:
-
-1. Type `/` to open the command menu, then select `/new` in Terminal 1.
-2. Copy the short one-time Internet code.
-3. Select `/join` in Terminal 2 and paste the code.
-4. Compare the safety number shown on both screens over a trusted channel.
-5. Type messages normally. `✓✓` means the peer acknowledged receipt.
-
-Running without `--profile` opens `default`. An existing pre-profile database is
-automatically retained as that default profile.
-
-Type `/` to open autocomplete for every action. Continue typing to fuzzy-filter
-the list, use Up/Down to select, Tab to insert without running, Enter to run the
-selected action, and Escape to close the menu. Use `/help` for all commands,
-`/source` for the exact corresponding source, `/license` for licensing
-information, and `/quit` for a clean shutdown.
-
-`/new` uses the deployed Internet relay. `/new-local` retains the original
-direct TCP mode for peers on the same reachable LAN. A custom relay can be
-selected with `P2PCHAT_RELAY_URL=https://your-worker.example`.
-
-## Release checks
+Run the complete client and relay checks before submitting changes:
 
 ```sh
 corepack pnpm check
 corepack pnpm build
-corepack pnpm start
 ```
 
-`check` validates both the terminal client and Cloudflare Worker. It runs strict
-TypeScript validation, ESLint, client tests, the official Workers-runtime
-Durable Object test, formatting checks, generated binding types, and a Wrangler
-deployment dry run.
+The checks include strict TypeScript, ESLint, formatting, protocol and storage
+tests, a Workers-runtime Durable Object integration test, and a Wrangler deploy
+dry run. See [CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow.
 
-## Security model
+## Relay development
 
-- Each authenticated connection is upgraded with the official, exact-pinned
-  `@signalapp/libsignal-client@0.99.3` implementation. A fresh classical
-  one-time prekey, signed prekey, and Kyber prekey establish a PQXDH session;
-  every application frame after setup is a Double Ratchet message.
-- Double Ratchet gives each message a unique key and provides forward-secrecy
-  and post-compromise-recovery properties as its chains advance. Replayed,
-  reordered, and tampered frames are handled by libsignal; prekey frames are
-  rejected after setup.
-- Signal identity keys are pinned to the authenticated Ed25519 peer identity.
-  A changed Signal identity is rejected, and the displayed safety number covers
-  both peers' Ed25519 and Signal identity keys.
-- Noise encrypts each live direct libp2p connection. The Signal layer remains
-  active inside Noise as defense in depth.
-- Internet sessions perform a code-protected Ed25519/X25519 handshake and derive
-  fresh directional AES-256-GCM keys. Signal messages run inside that encrypted
-  channel, so the Cloudflare relay only sees opaque ciphertext.
-- Long-term Ed25519 keys mutually authenticate app identities.
-- A one-time secret authenticates each invite; invites expire and cannot be
-  reused after a successful connection.
-- A safety number lets people detect an identity mismatch out of band.
-- Message bodies, private identities, prekeys, trusted peer identities, and
-  ratchet sessions are AES-256-GCM encrypted in local SQLite with a key derived
-  using scrypt. SQLite secure deletion and a non-persistent rollback journal
-  reduce recoverable stale key material.
-- Received text is stripped of terminal control and bidirectional override
-  characters before it is displayed.
-
-Database metadata such as timestamps, delivery state, and peer identifiers is
-not encrypted. Filesystem snapshots, backups, flash wear-leveling, a compromised
-unlocked device, or an exposed passphrase can defeat local key-erasure
-expectations. Cloudflare can still observe IP addresses, timing, room locators,
-and ciphertext sizes.
-
-This is a production-hardened release candidate, not an audited security
-product. It has not received an independent cryptographic or application
-security audit. Do not make high-risk safety claims or deploy it for vulnerable
-users until that review and its findings are complete.
-
-The libsignal package is AGPL-3.0-only, so the terminal client is also licensed
-under AGPL-3.0-only. Signal states that use of libsignal outside Signal is
-unsupported and its APIs may change without notice; this release pins the exact
-reviewed version and is not affiliated with Signal. The separately deployed
-Cloudflare relay remains MIT-licensed and does not link libsignal.
-
-## Internet relay
-
-The deployed relay is:
-
-```text
-https://p2pchat-relay.sathuashrith.com
+```sh
+corepack pnpm relay:dev
+corepack pnpm relay:test
+corepack pnpm relay:deploy
 ```
-
-Each invite gets a separate SQLite-backed Durable Object. Cloudflare stores only
-an encrypted invite envelope, token hashes, and short-lived connection tickets.
-It does not store messages. Rooms expire automatically after at most 15 minutes,
-and an invite stops issuing tickets after both roles have connected.
-
-Cloudflare can observe network metadata such as IP addresses, timing, frame
-sizes, and the opaque room locator. It cannot decrypt the invite, peer identities,
-or chat frames. The software has not received an independent security audit.
 
 To exercise the full client protocol against the deployed relay:
 
@@ -166,10 +176,10 @@ P2PCHAT_LIVE_RELAY_TEST=1 corepack pnpm exec vitest run \
   src/relay/live.integration.test.ts
 ```
 
-Relay development and deployment commands:
+The relay is separately MIT-licensed and does not link libsignal.
 
-```sh
-corepack pnpm relay:dev
-corepack pnpm relay:test
-corepack pnpm relay:deploy
-```
+## License
+
+The terminal client is licensed under
+[GNU AGPL-3.0-only](LICENSE). The Cloudflare relay is licensed under
+[MIT](relay/LICENSE).

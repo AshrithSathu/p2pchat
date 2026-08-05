@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   createUiAutocompleteProvider,
+  isQuitSubmission,
   parseUiCommand,
   UI_COMMAND_SUGGESTIONS,
 } from './commands.js';
@@ -29,6 +30,14 @@ describe('parseUiCommand', () => {
       kind: 'message',
       body: 'hello peer',
     });
+  });
+
+  it('recognizes quit across terminal Enter encodings', () => {
+    expect(isQuitSubmission('/quit', '\r')).toBe(true);
+    expect(isQuitSubmission(' /QUIT ', '\n')).toBe(true);
+    expect(isQuitSubmission('/exit', '\r')).toBe(true);
+    expect(isQuitSubmission('/quit', 'x')).toBe(false);
+    expect(isQuitSubmission('/new', '\n')).toBe(false);
   });
 
   it('offers and applies fuzzy slash-command completions', async () => {

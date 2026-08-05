@@ -1,7 +1,7 @@
 {
-  "name": "p2p-chat",
-  "version": "0.4.0",
-  "description": "Private peer-to-peer terminal chat",
+  "name": "p2pchat",
+  "version": "0.5.0",
+  "description": "End-to-end encrypted, local-first terminal chat",
   "scripts": {
     "test": "vitest run src",
     "dev": "tsx src/cli.ts",
@@ -17,11 +17,11 @@
     "relay:test": "pnpm --dir relay test",
     "relay:check": "pnpm --dir relay check",
     "relay:deploy": "pnpm --dir relay deploy",
-    "check": "pnpm check:client && pnpm relay:check"
+    "check": "pnpm check:client && pnpm relay:check",
+    "prepack": "pnpm check:client && pnpm build"
   },
   "license": "AGPL-3.0-only",
   "type": "module",
-  "private": true,
   "packageManager": "pnpm@11.4.0",
   "engines": {
     "node": ">=22.0.0"
@@ -65,11 +65,25 @@
   },
   "files": [
     "dist",
-    "src",
     "LICENSE",
     "README.md",
-    "tsconfig.build.json",
     "CHANGELOG.md",
     "SECURITY.md"
-  ]
+  ],
+  "keywords": [
+    "p2p",
+    "chat",
+    "terminal",
+    "cli",
+    "end-to-end-encryption",
+    "e2ee",
+    "signal-protocol",
+    "local-first"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "preferGlobal": true,
+  "author": "AshrithSathu"
 }
