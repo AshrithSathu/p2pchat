@@ -38,8 +38,7 @@ jobs:
         run: test "v$(node -p "require('./package.json').version")" = "$RELEASE_TAG"
       - run: pnpm check
       - name: Publish to GitHub Packages
-        run: >-
-          pnpm publish --no-git-checks
-          --registry=https://npm.pkg.github.com
+        run: pnpm publish --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PNPM_CONFIG_REGISTRY: https://npm.pkg.github.com
