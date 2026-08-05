@@ -5,54 +5,105 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       name="description"
-      content="p2pchat is a fast, local-first, end-to-end encrypted terminal chat."
+      content="p2pchat is a private, local-first, end-to-end encrypted terminal messenger."
     />
-    <meta name="theme-color" content="#050505" />
-    <title>p2pchat — this chat never happened</title>
+    <meta name="theme-color" content="#0b0b09" />
+    <meta property="og:type" content="website" />
+    <meta
+      property="og:title"
+      content="p2pchat — talk like nobody's listening"
+    />
+    <meta
+      property="og:description"
+      content="Private, local-first, end-to-end encrypted terminal chat."
+    />
+    <meta property="og:url" content="https://p2pchat.sathuashrith.com/" />
+    <meta
+      property="og:image"
+      content="https://p2pchat.sathuashrith.com/og.png"
+    />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:alt"
+      content="p2pchat private terminal messenger poster"
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta
+      name="twitter:title"
+      content="p2pchat — talk like nobody's listening"
+    />
+    <meta
+      name="twitter:description"
+      content="Private, local-first, end-to-end encrypted terminal chat."
+    />
+    <meta
+      name="twitter:image"
+      content="https://p2pchat.sathuashrith.com/og.png"
+    />
+    <title>p2pchat — talk like nobody's listening</title>
     <link rel="stylesheet" href="/styles.css" />
     <script type="module" src="/app.js"></script>
   </head>
   <body>
-    <div class="noise" aria-hidden="true"></div>
-    <main class="page-shell">
-      <header class="site-header">
-        <a class="brand" href="/" aria-label="p2pchat home">
-          <span class="brand-mark" aria-hidden="true">›_</span>
-          <span>p2pchat</span>
+    <main class="poster">
+      <header class="masthead">
+        <a class="wordmark" href="/" aria-label="p2pchat home">
+          <span class="wordmark-prompt" aria-hidden="true">:</span>
+          <span>p2p/chat</span>
         </a>
+
+        <p class="masthead-note">private terminal messenger</p>
+
         <nav aria-label="Project links">
-          <a href="https://github.com/AshrithSathu/p2pchat">source ↗</a>
-          <a href="https://www.npmjs.com/package/@ashrithsathu/p2pchat"
-            >npm ↗</a
-          >
+          <a href="https://github.com/AshrithSathu/p2pchat">github</a>
+          <a href="https://www.npmjs.com/package/@ashrithsathu/p2pchat">npm</a>
         </nav>
       </header>
 
-      <section class="hero" aria-labelledby="hero-title">
-        <div class="hero-copy">
-          <div class="status-pill">
-            <span class="status-dot" aria-hidden="true"></span>
-            <span>relay online</span>
-            <span class="status-divider" aria-hidden="true">/</span>
-            <span>e2ee</span>
+      <section class="main-grid" aria-labelledby="hero-title">
+        <div class="hero-panel">
+          <div class="section-label">
+            <span>01</span>
+            <span>off-the-record communication</span>
           </div>
 
           <h1 id="hero-title">
-            this chat<br />
-            <span>never happened.</span>
+            <span>talk like</span>
+            <span>nobody's</span>
+            <span class="accent-line">listening.</span>
           </h1>
 
-          <p class="lede">
-            Private terminal chat with Signal encryption, local-only history,
-            and no account. Just two terminals and a mildly suspicious code.
-          </p>
+          <div class="hero-lower">
+            <p class="lede">
+              No account. No cloud history. No readable relay traffic. Just a
+              terminal, a one-time code, and the person you meant to talk to.
+            </p>
 
-          <div class="install-card" aria-label="Installation command">
-            <div class="terminal-bar" aria-hidden="true">
-              <span class="terminal-dot"></span>
-              <span class="terminal-dot"></span>
-              <span class="terminal-dot"></span>
-              <span class="terminal-label">secure-ish-looking-terminal</span>
+            <dl class="proof-list">
+              <div>
+                <dt>transport</dt>
+                <dd>p2p + relay fallback</dd>
+              </div>
+              <div>
+                <dt>messages</dt>
+                <dd>Signal encrypted</dd>
+              </div>
+              <div>
+                <dt>history</dt>
+                <dd>encrypted locally</dd>
+              </div>
+            </dl>
+          </div>
+
+          <div class="install-block" aria-label="Installation command">
+            <div class="install-heading">
+              <span>install / macOS + Linux</span>
+              <a
+                href="https://p2pchat-relay.sathuashrith.com/install.sh"
+                aria-label="Inspect the installer source"
+                >inspect first ↗</a
+              >
             </div>
             <div class="command-row">
               <span class="prompt" aria-hidden="true">$</span>
@@ -66,59 +117,92 @@
                 aria-label="Copy install command"
               >
                 <span class="copy-idle">copy</span>
-                <span class="copy-done" aria-hidden="true">copied ✓</span>
+                <span class="copy-done" aria-hidden="true">copied</span>
               </button>
             </div>
           </div>
 
-          <p class="inspect-note">
-            inspect scripts before running them. private ≠ reckless.
+          <p class="after-install">
+            then: <code>p2pchat --profile your-name</code>
           </p>
-
-          <div class="quick-start">
-            <span>then run</span>
-            <code>p2pchat --profile your-secret-name</code>
-          </div>
         </div>
 
-        <aside class="peer-window" aria-label="Example encrypted chat session">
-          <div class="peer-titlebar">
-            <span>p2pchat / definitely-not-a-spy</span>
-            <span class="peer-lock" aria-hidden="true">[locked]</span>
+        <aside class="trace-panel" aria-label="How a private message travels">
+          <div class="section-label trace-label">
+            <span>02</span>
+            <span>live route trace</span>
           </div>
-          <div class="peer-body">
-            <p class="system-line">› rendezvous authenticated</p>
-            <p class="system-line">› safety number matched</p>
-            <p class="system-line">› signal session established</p>
-            <div class="chat-line remote">
-              <span class="chat-name">stranger</span>
-              <span>did you delete the evidence?</span>
+
+          <div
+            class="route-map"
+            aria-label="Alice and Bob connected through an encrypted relay"
+          >
+            <div class="peer-node">
+              <span class="node-index">A</span>
+              <strong>alice</strong>
+              <small>terminal / online</small>
             </div>
-            <div class="chat-line local">
-              <span class="chat-name">you</span>
-              <span>what evidence</span>
-              <span class="receipt">✓✓</span>
+
+            <div class="route-line" aria-hidden="true">
+              <span></span>
+              <b>ciphertext</b>
+              <span></span>
             </div>
-            <div class="encrypted-line" aria-hidden="true">
-              6f 70 61 71 75 65 · ciphertext only · 33 a8 c1
+
+            <div class="peer-node peer-node-right">
+              <span class="node-index">B</span>
+              <strong>bob</strong>
+              <small>terminal / online</small>
             </div>
           </div>
-          <div class="peer-footer">
-            <span><i aria-hidden="true"></i> peer online</span>
-            <span>messages stay here</span>
+
+          <div class="relay-note">
+            <span class="relay-pulse" aria-hidden="true"></span>
+            <span>relay connected</span>
+            <span>sees: timing + ciphertext</span>
+          </div>
+
+          <ol class="packet-log" aria-label="Encrypted connection events">
+            <li>
+              <time>21:04:08</time>
+              <span>invite accepted</span>
+              <b>ok</b>
+            </li>
+            <li>
+              <time>21:04:09</time>
+              <span>safety number matched</span>
+              <b>ok</b>
+            </li>
+            <li>
+              <time>21:04:10</time>
+              <span>Signal session established</span>
+              <b>ok</b>
+            </li>
+            <li class="packet-row">
+              <time>21:04:12</time>
+              <span>alice → bob / 168 encrypted bytes</span>
+              <b>✓✓</b>
+            </li>
+          </ol>
+
+          <div class="message-sample">
+            <span class="message-meta">alice / now</span>
+            <p>this conversation does not need a cloud.</p>
+          </div>
+
+          <div class="trace-statement">
+            <span>the server</span>
+            <strong>knows nothing.</strong>
           </div>
         </aside>
       </section>
 
-      <footer class="site-footer">
-        <span>signal-encrypted</span>
-        <span aria-hidden="true">•</span>
-        <span>local-first</span>
-        <span aria-hidden="true">•</span>
-        <span>open source</span>
-        <span class="footer-joke"
-          >tell your friend the code. not the group chat.</span
+      <footer class="footer-strip">
+        <span>open source / AGPL-3.0</span>
+        <span class="footer-status"
+          ><i aria-hidden="true"></i> relay operational</span
         >
+        <span class="footer-joke">your group chat could never.</span>
       </footer>
     </main>
   </body>
