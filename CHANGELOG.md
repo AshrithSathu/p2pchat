@@ -9,11 +9,18 @@ All notable changes to p2pchat are documented here.
 - Version-pinned macOS/Linux installer at
   `https://p2pchat-relay.sathuashrith.com/install.sh`, plus a human-readable
   landing page with inspect-first instructions.
+- Tracker-free, single-screen project website at
+  `https://p2pchat.sathuashrith.com`, isolated under `landing/` and deployed as
+  Cloudflare static assets with strict browser security headers.
+- GitHub issue and pull-request templates, CODEOWNERS, Dependabot version
+  updates, dependency review, and CodeQL scanning for the public repository.
 
 ### Changed
 
 - Aligned the documented Node.js requirement with the TUI runtime dependency:
   Node.js 22.19 or newer.
+- Hardened CI with cancellation of superseded runs, per-job timeouts, manual
+  dispatch, and landing-site deployment validation.
 
 ## 0.5.0 - 2026-08-05
 

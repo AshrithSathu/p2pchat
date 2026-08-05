@@ -1,0 +1,62 @@
+name: Bug report
+description: Report a reproducible problem in the client, relay, or website.
+title: 'bug: '
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        Do not include passwords, invite codes, private keys, identities, or real
+        chat messages. Report security vulnerabilities privately through the
+        repository Security tab.
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - Terminal client
+        - Relay
+        - Installer
+        - Landing page
+        - Documentation
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output from `p2pchat --version`, or the commit SHA.
+      placeholder: 0.5.0
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Describe the actual and expected behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Provide the smallest safe set of steps that reproduces the issue.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Operating system, terminal, and Node.js version.
+      placeholder: macOS 15, Terminal.app, Node.js 24.14.0
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Safety check
+      options:
+        - label: I removed all sensitive chat and identity material from this report.
+          required: true
+        - label: This is not a privately reportable security vulnerability.
+          required: true

@@ -8,6 +8,8 @@ Fast, local-first, end-to-end encrypted terminal chat written in strict
 TypeScript. Peers can connect across ordinary NAT and firewall boundaries using
 short-lived invite codes and an opaque Cloudflare WebSocket relay.
 
+Website: [p2pchat.sathuashrith.com](https://p2pchat.sathuashrith.com)
+
 > [!IMPORTANT]
 > p2pchat is production-hardened but has not received an independent security
 > audit. Read the [security model](#security-model) and [security policy](SECURITY.md)
@@ -168,7 +170,8 @@ corepack pnpm install --frozen-lockfile
 corepack pnpm dev --profile alice
 ```
 
-Run the complete client and relay checks before submitting changes:
+Run the complete client, relay, and landing-page checks before submitting
+changes:
 
 ```sh
 corepack pnpm check
@@ -177,7 +180,20 @@ corepack pnpm build
 
 The checks include strict TypeScript, ESLint, formatting, protocol and storage
 tests, a Workers-runtime Durable Object integration test, and a Wrangler deploy
-dry run. See [CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow.
+dry run for both Cloudflare projects. See [CONTRIBUTING.md](CONTRIBUTING.md) for
+the development workflow.
+
+## Landing page development
+
+The public website is isolated in [`landing/`](landing/README.md). It is a
+static, tracker-free Cloudflare Workers Assets deployment and does not share
+runtime code with the client or relay.
+
+```sh
+corepack pnpm landing:dev
+corepack pnpm landing:check
+corepack pnpm landing:deploy
+```
 
 ## Relay development
 

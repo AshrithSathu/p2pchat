@@ -9,6 +9,7 @@ export default tseslint.config(
       'coverage/**',
       'dist/**',
       'eslint.config.js',
+      'landing/public/app.js',
       'node_modules/**',
       'relay/src/worker-configuration.d.ts',
       'relay/vitest.config.ts',

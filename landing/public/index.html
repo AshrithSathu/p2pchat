@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="p2pchat is a fast, local-first, end-to-end encrypted terminal chat."
+    />
+    <meta name="theme-color" content="#050505" />
+    <title>p2pchat — this chat never happened</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script type="module" src="/app.js"></script>
+  </head>
+  <body>
+    <div class="noise" aria-hidden="true"></div>
+    <main class="page-shell">
+      <header class="site-header">
+        <a class="brand" href="/" aria-label="p2pchat home">
+          <span class="brand-mark" aria-hidden="true">›_</span>
+          <span>p2pchat</span>
+        </a>
+        <nav aria-label="Project links">
+          <a href="https://github.com/AshrithSathu/p2pchat">source ↗</a>
+          <a href="https://www.npmjs.com/package/@ashrithsathu/p2pchat"
+            >npm ↗</a
+          >
+        </nav>
+      </header>
+
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="hero-copy">
+          <div class="status-pill">
+            <span class="status-dot" aria-hidden="true"></span>
+            <span>relay online</span>
+            <span class="status-divider" aria-hidden="true">/</span>
+            <span>e2ee</span>
+          </div>
+
+          <h1 id="hero-title">
+            this chat<br />
+            <span>never happened.</span>
+          </h1>
+
+          <p class="lede">
+            Private terminal chat with Signal encryption, local-only history,
+            and no account. Just two terminals and a mildly suspicious code.
+          </p>
+
+          <div class="install-card" aria-label="Installation command">
+            <div class="terminal-bar" aria-hidden="true">
+              <span class="terminal-dot"></span>
+              <span class="terminal-dot"></span>
+              <span class="terminal-dot"></span>
+              <span class="terminal-label">secure-ish-looking-terminal</span>
+            </div>
+            <div class="command-row">
+              <span class="prompt" aria-hidden="true">$</span>
+              <code id="install-command" tabindex="-1"
+                >curl -fsSL https://p2pchat-relay.sathuashrith.com/install.sh |
+                sh</code
+              >
+              <button
+                id="copy-command"
+                type="button"
+                aria-label="Copy install command"
+              >
+                <span class="copy-idle">copy</span>
+                <span class="copy-done" aria-hidden="true">copied ✓</span>
+              </button>
+            </div>
+          </div>
+
+          <p class="inspect-note">
+            inspect scripts before running them. private ≠ reckless.
+          </p>
+
+          <div class="quick-start">
+            <span>then run</span>
+            <code>p2pchat --profile your-secret-name</code>
+          </div>
+        </div>
+
+        <aside class="peer-window" aria-label="Example encrypted chat session">
+          <div class="peer-titlebar">
+            <span>p2pchat / definitely-not-a-spy</span>
+            <span class="peer-lock" aria-hidden="true">[locked]</span>
+          </div>
+          <div class="peer-body">
+            <p class="system-line">› rendezvous authenticated</p>
+            <p class="system-line">› safety number matched</p>
+            <p class="system-line">› signal session established</p>
+            <div class="chat-line remote">
+              <span class="chat-name">stranger</span>
+              <span>did you delete the evidence?</span>
+            </div>
+            <div class="chat-line local">
+              <span class="chat-name">you</span>
+              <span>what evidence</span>
+              <span class="receipt">✓✓</span>
+            </div>
+            <div class="encrypted-line" aria-hidden="true">
+              6f 70 61 71 75 65 · ciphertext only · 33 a8 c1
+            </div>
+          </div>
+          <div class="peer-footer">
+            <span><i aria-hidden="true"></i> peer online</span>
+            <span>messages stay here</span>
+          </div>
+        </aside>
+      </section>
+
+      <footer class="site-footer">
+        <span>signal-encrypted</span>
+        <span aria-hidden="true">•</span>
+        <span>local-first</span>
+        <span aria-hidden="true">•</span>
+        <span>open source</span>
+        <span class="footer-joke"
+          >tell your friend the code. not the group chat.</span
+        >
+      </footer>
+    </main>
+  </body>
+</html>

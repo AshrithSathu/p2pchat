@@ -3,6 +3,7 @@ node_modules/
 dist/
 coverage/
 .wrangler/
+landing/public/app.js
 *.log
 .DS_Store
 .env

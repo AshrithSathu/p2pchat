@@ -1,0 +1,16 @@
+{
+  "name": "@p2pchat/landing",
+  "description": "Static landing page for p2pchat",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "pnpm build && wrangler dev",
+    "check": "pnpm build && wrangler deploy --dry-run",
+    "deploy": "pnpm build && wrangler deploy"
+  },
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "typescript": "5.9.3",
+    "wrangler": "^4.118.0"
+  }
+}

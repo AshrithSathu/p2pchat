@@ -17,7 +17,11 @@
     "relay:test": "pnpm --dir relay test",
     "relay:check": "pnpm --dir relay check",
     "relay:deploy": "pnpm --dir relay deploy",
-    "check": "pnpm check:client && pnpm relay:check",
+    "landing:build": "pnpm --dir landing build",
+    "landing:dev": "pnpm --dir landing dev",
+    "landing:check": "pnpm --dir landing check",
+    "landing:deploy": "pnpm --dir landing deploy",
+    "check": "pnpm check:client && pnpm relay:check && pnpm landing:check",
     "prepack": "pnpm check:client && pnpm build"
   },
   "license": "AGPL-3.0-only",
