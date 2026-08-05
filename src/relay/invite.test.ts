@@ -41,7 +41,9 @@ describe('Internet relay invite', () => {
         decryptRelayInvite(locator, material.encryptedInvite),
       ).toMatchObject({ creatorIdentityId: store.identity.id });
 
-      const tampered = `${material.encryptedInvite.slice(0, -1)}A`;
+      const replacement = material.encryptedInvite.endsWith('A') ? 'B' : 'A';
+      const tampered = `${material.encryptedInvite.slice(0, -1)}${replacement}`;
+      expect(tampered).not.toBe(material.encryptedInvite);
       expect(() => decryptRelayInvite(locator, tampered)).toThrow('invalid');
       store.close();
     } finally {
