@@ -6,6 +6,8 @@ All notable changes to p2pchat are documented here.
 
 ### Added
 
+- Automated GitHub Packages publishing for releases, with a manual dispatch
+  path for backfilling an existing package version.
 - Version-pinned macOS/Linux installer at
   `https://p2pchat-relay.sathuashrith.com/install.sh`, plus a human-readable
   landing page with inspect-first instructions.
