@@ -7,7 +7,7 @@ failure behavior take priority over adding features quickly.
 
 Requirements:
 
-- Node.js 22 or newer
+- Node.js 22.19 or newer
 - Corepack
 
 ```sh

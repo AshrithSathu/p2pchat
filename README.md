@@ -15,7 +15,25 @@ short-lived invite codes and an opaque Cloudflare WebSocket relay.
 
 ## Install
 
-Requirements: Node.js 22 or newer and Corepack.
+Requirements: Node.js 22.19 or newer and Corepack.
+
+One-command install for macOS and Linux:
+
+```sh
+curl -fsSL https://p2pchat-relay.sathuashrith.com/install.sh | sh
+```
+
+The installer is version-pinned, never invokes `sudo`, and verifies the
+installed command. To inspect it before running:
+
+```sh
+curl -fsSLo p2pchat-install.sh \
+  https://p2pchat-relay.sathuashrith.com/install.sh
+less p2pchat-install.sh
+sh p2pchat-install.sh
+```
+
+You can also install directly from npm with pnpm:
 
 ```sh
 corepack enable
@@ -25,7 +43,7 @@ corepack pnpm add --global \
   @ashrithsathu/p2pchat
 ```
 
-The standard npm client is also supported:
+The standard npm client is supported too:
 
 ```sh
 npm install --global @ashrithsathu/p2pchat

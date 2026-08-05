@@ -2,6 +2,19 @@
 
 All notable changes to p2pchat are documented here.
 
+## Unreleased
+
+### Added
+
+- Version-pinned macOS/Linux installer at
+  `https://p2pchat-relay.sathuashrith.com/install.sh`, plus a human-readable
+  landing page with inspect-first instructions.
+
+### Changed
+
+- Aligned the documented Node.js requirement with the TUI runtime dependency:
+  Node.js 22.19 or newer.
+
 ## 0.5.0 - 2026-08-05
 
 ### Added

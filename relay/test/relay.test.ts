@@ -10,6 +10,38 @@ const ticketResponseSchema = z.object({
 const SELF = exports.default;
 
 describe('p2pchat relay', () => {
+  it('serves a version-pinned installer and human-readable landing page', async () => {
+    const installer = await SELF.fetch('https://relay.test/install.sh');
+    expect(installer.status).toBe(200);
+    expect(installer.headers.get('Content-Type')).toContain(
+      'text/x-shellscript',
+    );
+    expect(installer.headers.get('X-Content-Type-Options')).toBe('nosniff');
+    expect(installer.headers.get('X-p2pchat-Version')).toBe('0.5.0');
+    const script = await installer.text();
+    expect(script).toMatch(/^#!\/bin\/sh\nset -eu/u);
+    expect(script).toContain(
+      "package_name='@ashrithsathu/p2pchat'\npackage_version='0.5.0'",
+    );
+    expect(script).toContain('npm install --global');
+    expect(script).not.toMatch(/^\s*sudo\s/mu);
+
+    const head = await SELF.fetch('https://relay.test/install.sh', {
+      method: 'HEAD',
+    });
+    expect(head.status).toBe(200);
+    expect(await head.text()).toBe('');
+
+    const landing = await SELF.fetch('https://relay.test/');
+    expect(landing.status).toBe(200);
+    await expect(landing.text()).resolves.toContain(
+      'curl -fsSL https://p2pchat-relay.sathuashrith.com/install.sh | sh',
+    );
+
+    const repeatedSlashLanding = await SELF.fetch('https://relay.test//');
+    expect(repeatedSlashLanding.status).toBe(200);
+  });
+
   it('protects an opaque invite and forwards WebSocket frames', async () => {
     const roomId = await hash(randomToken());
     const creatorToken = randomToken();

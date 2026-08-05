@@ -3,6 +3,7 @@ import {
   roomIdSchema,
   ticketRequestSchema,
 } from './schema.js';
+import { installerResponse, landingPageResponse } from './installer.js';
 import type { RelayRoom } from './room.js';
 
 export { RelayRoom } from './room.js';
@@ -29,6 +30,12 @@ export default {
 
 async function route(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
+  if (url.pathname === '' || /^\/+$/u.test(url.pathname)) {
+    return landingPageResponse(request.method);
+  }
+  if (url.pathname === '/install.sh') {
+    return installerResponse(request.method);
+  }
   if (request.method === 'GET' && url.pathname === '/health') {
     return json({ status: 'ok', service: 'p2pchat-relay', version: 1 });
   }
