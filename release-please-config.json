@@ -1,0 +1,16 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "release-type": "node",
+  "include-component-in-tag": false,
+  "packages": {
+    ".": {
+      "package-name": "@ashrithsathu/p2pchat",
+      "extra-files": [
+        {
+          "type": "generic",
+          "path": "src/core/version.ts"
+        }
+      ]
+    }
+  }
+}

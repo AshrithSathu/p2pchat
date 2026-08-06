@@ -36,9 +36,29 @@ applicable.
 - Keep changes focused and explain their security impact.
 - Do not commit databases, invite codes, passwords, private keys, tokens, or
   real message content.
-- Update `README.md`, `CHANGELOG.md`, and `SECURITY.md` when behavior or risk
-  changes.
+- Update `README.md` and `SECURITY.md` when behavior or risk changes. Release
+  Please generates `CHANGELOG.md` from Conventional Commit messages.
 - Confirm that Linux, macOS, and Windows CI pass.
+
+## Branches and commit messages
+
+Open feature and fix pull requests against `develop`. Use squash merges and a
+[Conventional Commit](https://www.conventionalcommits.org/) title so automated
+versioning can classify the change:
+
+- `fix:` creates a patch release.
+- `feat:` creates a minor release.
+- `feat!:` or a `BREAKING CHANGE:` footer creates a major release.
+- `docs:`, `test:`, `ci:`, and `chore:` do not create a release by themselves.
+
+When `develop` is stable, open a pull request from `develop` to `main`. Merging
+that pull request updates the generated Release Please pull request; it does not
+publish immediately. Merging the generated release pull request updates
+`package.json`, `src/core/version.ts`, and `CHANGELOG.md`, creates the `v*` tag
+and GitHub Release, and publishes the npm and GitHub packages.
+
+Maintainer setup and recovery instructions are in
+[`.github/RELEASING.md`](.github/RELEASING.md).
 
 ## Vulnerabilities
 

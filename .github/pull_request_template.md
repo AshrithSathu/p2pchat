@@ -2,6 +2,8 @@
 
 <!-- Explain the behavior change and why it is needed. -->
 
+<!-- Feature and fix PRs normally target develop. Only release candidates and generated release PRs target main. -->
+
 ## Security and privacy impact
 
 <!-- Note effects on encryption, metadata, storage, identity, or relay behavior. -->
