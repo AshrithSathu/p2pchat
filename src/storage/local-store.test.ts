@@ -5,6 +5,7 @@ import { join } from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { prepareImage } from '../image/image.js';
 import type { KdfOptions } from './crypto.js';
 import { InvalidPassphraseError, LocalStore } from './local-store.js';
 
@@ -184,6 +185,65 @@ describe('LocalStore', () => {
     );
     expect(reopened.deleteSecureState('signal-session', 'peer-1')).toBe(true);
     expect(reopened.readSecureState('signal-session', 'peer-1')).toBeNull();
+    reopened.close();
+  });
+
+  it('encrypts image filenames and content at rest', async () => {
+    const directory = await temporaryDirectory();
+    const peerDirectory = await temporaryDirectory();
+    const passphrase = 'image encryption test passphrase';
+    const store = await LocalStore.open({
+      directory,
+      passphrase,
+      kdfOptions: testKdfOptions,
+    });
+    const peerStore = await LocalStore.open({
+      directory: peerDirectory,
+      passphrase: 'image peer test passphrase',
+      kdfOptions: testKdfOptions,
+    });
+    const conversationId = store.ensureConversation(peerStore.identity);
+    const messageId = randomUUID();
+    const attachmentId = randomUUID();
+    const secretBytes = Buffer.from('unique-image-payload-secret-8491');
+    const png = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+      'base64',
+    );
+    const image = prepareImage(
+      Buffer.concat([png, secretBytes]),
+      'private-screenshot-8491.png',
+    );
+
+    store.saveOutgoingImageMessage({
+      conversationId,
+      messageId,
+      sequenceNumber: store.nextSequenceNumber(conversationId),
+      body: '',
+      sentAt: new Date().toISOString(),
+      image: { ...image, id: attachmentId },
+    });
+    store.close();
+    peerStore.close();
+
+    const databaseBytes = await readFile(join(directory, 'chat.db'));
+    expect(databaseBytes.includes(secretBytes)).toBe(false);
+    expect(
+      databaseBytes.includes(Buffer.from('private-screenshot-8491.png')),
+    ).toBe(false);
+
+    const reopened = await LocalStore.open({
+      directory,
+      passphrase,
+      kdfOptions: testKdfOptions,
+    });
+    const stored = reopened.listMessages(conversationId);
+    expect(stored).toHaveLength(1);
+    expect(stored[0]?.id).toBe(messageId);
+    expect(stored[0]?.image?.id).toBe(attachmentId);
+    expect(stored[0]?.image?.filename).toBe('private-screenshot-8491.png');
+    expect(stored[0]?.image?.mimeType).toBe('image/png');
+    expect(reopened.readImageAttachment(attachmentId)).toEqual(image.bytes);
     reopened.close();
   });
 });

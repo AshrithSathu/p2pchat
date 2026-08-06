@@ -14,6 +14,7 @@ import { z } from 'zod';
 
 import type { JsonChannel } from '../network/channel.js';
 import type { LocalStore } from '../storage/local-store.js';
+import { IMAGE_TRANSFER_FEATURE } from '../image/image.js';
 import {
   PersistentSignalProtocolStore,
   deserializePreKeyBundle,
@@ -27,6 +28,8 @@ const SIGNAL_WHISPER_MESSAGE_TYPE: number = CiphertextMessageType.Whisper;
 const SIGNAL_PREKEY_MESSAGE_TYPE: number = CiphertextMessageType.PreKey;
 const base64Url = z.string().regex(/^[A-Za-z0-9_-]+$/u);
 const peerId = base64Url.length(43);
+const advertisedFeatureSchema = z.string().regex(/^[a-z0-9-]{1,64}$/u);
+const localFeatures = [IMAGE_TRANSFER_FEATURE] as const;
 
 export const signalOfferSchema = z.object({
   type: z.literal('signal-offer'),
@@ -36,6 +39,7 @@ export const signalOfferSchema = z.object({
   creatorPeerId: peerId,
   joinerPeerId: peerId,
   bundle: signalPreKeyBundleSchema,
+  features: z.array(advertisedFeatureSchema).max(16).optional(),
 });
 
 export const signalWireFrameSchema = z.object({
@@ -53,6 +57,7 @@ const signalInitSchema = z.object({
   creatorPeerId: peerId,
   joinerPeerId: peerId,
   signalIdentityKey: base64Url.min(40).max(128),
+  features: z.array(advertisedFeatureSchema).max(16).optional(),
 });
 
 const signalReadySchema = z.object({
@@ -63,7 +68,10 @@ const signalReadySchema = z.object({
   creatorPeerId: peerId,
   joinerPeerId: peerId,
   signalIdentityKey: base64Url.min(40).max(128),
+  features: z.array(advertisedFeatureSchema).max(16).optional(),
 });
+
+export type SignalFeature = typeof IMAGE_TRANSFER_FEATURE;
 
 export interface EstablishSignalChannelOptions {
   readonly inner: JsonChannel;
@@ -76,6 +84,7 @@ export interface EstablishedSignalChannel {
   readonly channel: JsonChannel;
   readonly localIdentityKey: Buffer;
   readonly remoteIdentityKey: Buffer;
+  readonly remoteFeatures: readonly SignalFeature[];
 }
 
 export async function establishSignalChannel(
@@ -108,6 +117,7 @@ async function establishAsCreator(
     creatorPeerId: store.localAddress.name(),
     joinerPeerId: remotePeerId,
     bundle: generatedBundle.data,
+    features: localFeatures,
   });
   const signal = AbortSignal.timeout(HANDSHAKE_TIMEOUT_MS);
 
@@ -143,6 +153,7 @@ async function establishAsCreator(
       creatorPeerId: offer.creatorPeerId,
       joinerPeerId: offer.joinerPeerId,
       signalIdentityKey: localIdentityKey.toString('base64url'),
+      features: localFeatures,
     });
     const encryptedReady = await signalEncrypt(
       encodePlaintext(ready),
@@ -163,6 +174,7 @@ async function establishAsCreator(
       channel: new SignalJsonChannel(inner, store, remotePeerId),
       localIdentityKey,
       remoteIdentityKey: serializeKey(remoteIdentityKey),
+      remoteFeatures: recognizedFeatures(init.features),
     };
   } finally {
     generatedBundle.discard();
@@ -212,6 +224,7 @@ async function establishAsJoiner(
     creatorPeerId: offer.creatorPeerId,
     joinerPeerId: offer.joinerPeerId,
     signalIdentityKey: localIdentityKey.toString('base64url'),
+    features: localFeatures,
   });
   const encryptedInit = await signalEncrypt(
     encodePlaintext(init),
@@ -246,6 +259,7 @@ async function establishAsJoiner(
     channel: new SignalJsonChannel(inner, store, remotePeerId),
     localIdentityKey,
     remoteIdentityKey: serializeKey(remoteIdentityKey),
+    remoteFeatures: recognizedFeatures(offer.features),
   };
 }
 
@@ -409,4 +423,12 @@ function assertSerializedIdentity(encoded: string, expected: PublicKey): void {
 
 function serializeKey(key: PublicKey): Buffer {
   return Buffer.from(key.serialize());
+}
+
+function recognizedFeatures(
+  features: readonly string[] | undefined,
+): readonly SignalFeature[] {
+  return features?.includes(IMAGE_TRANSFER_FEATURE)
+    ? [IMAGE_TRANSFER_FEATURE]
+    : [];
 }

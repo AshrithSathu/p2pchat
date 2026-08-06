@@ -79,6 +79,17 @@ On the second device:
 Messages can be typed normally after authentication. `✓✓` means the peer
 acknowledged receipt.
 
+## Send images
+
+Copy an image and press `Ctrl+V` in p2pchat (`Alt+V` on Windows), or drop an
+image file into the terminal. A pending thumbnail appears; type an optional
+caption and press Enter to send it. Press Escape to remove the pending image.
+
+PNG, JPEG, GIF, and WebP images up to 2 MiB are supported. One image can be
+attached to each message. Kitty, Ghostty, WezTerm, Warp, and iTerm2 display
+images inline using terminal-native graphics. Other terminals show a compact
+metadata fallback.
+
 ## Commands
 
 | Command        | Action                                         |
@@ -125,6 +136,9 @@ versions before profiles remain available through the `default` profile.
   rendezvous and establish encrypted transport keys.
 - Signal PQXDH establishes the application session, and every message is
   protected by the Double Ratchet.
+- Image transfers are negotiated as an optional protocol feature and split into
+  small chunks; every chunk passes through the same Signal Double Ratchet as
+  text messages. The relay never receives image plaintext.
 - The relay forwards opaque ciphertext and does not store chat messages.
 - `/new-local` keeps the original direct TCP/libp2p mode for peers that can
   reach one another without the relay.
@@ -145,6 +159,9 @@ self-hosted relay.
 - Message bodies, private identities, prekeys, trusted peer state, and ratchet
   sessions are encrypted in SQLite using AES-256-GCM. The local key is derived
   from the profile password with scrypt.
+- Image content and image metadata, including filenames and MIME types, are
+  stored in separate AES-256-GCM envelopes. Only attachment byte length and the
+  same message-routing metadata described below remain visible in SQLite.
 - Profile directories use owner-only permissions on supported operating
   systems, and SQLite secure deletion is enabled.
 - Received messages are stripped of terminal control and bidirectional override
