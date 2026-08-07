@@ -1,2 +1,2 @@
-export const APP_VERSION = '0.5.0'; // x-release-please-version
+export const APP_VERSION = '0.6.0'; // x-release-please-version
 export const APP_TAG = `v${APP_VERSION}`;
