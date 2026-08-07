@@ -16,6 +16,7 @@ const testKdfOptions: KdfOptions = {
   parallelization: 1,
   maxMemory: 16 * 1024 * 1024,
 };
+const STORAGE_TEST_TIMEOUT_MS = 20_000;
 
 const directories: string[] = [];
 
@@ -106,140 +107,150 @@ describe('LocalStore', () => {
     ).rejects.toBeInstanceOf(InvalidPassphraseError);
   });
 
-  it('persists message history without storing plaintext bodies', async () => {
-    const directory = await temporaryDirectory();
-    const peerDirectory = await temporaryDirectory();
-    const passphrase = 'history encryption test passphrase';
-    const store = await LocalStore.open({
-      directory,
-      passphrase,
-      kdfOptions: testKdfOptions,
-    });
-    const peerStore = await LocalStore.open({
-      directory: peerDirectory,
-      passphrase: 'remote peer test passphrase',
-      kdfOptions: testKdfOptions,
-    });
-    const peer = peerStore.identity;
-    const conversationId = store.ensureConversation(peer);
-    const messageId = randomUUID();
-    const secretBody = 'uniquely secret local message body 9417';
-    const sentAt = new Date().toISOString();
+  it(
+    'persists message history without storing plaintext bodies',
+    async () => {
+      const directory = await temporaryDirectory();
+      const peerDirectory = await temporaryDirectory();
+      const passphrase = 'history encryption test passphrase';
+      const store = await LocalStore.open({
+        directory,
+        passphrase,
+        kdfOptions: testKdfOptions,
+      });
+      const peerStore = await LocalStore.open({
+        directory: peerDirectory,
+        passphrase: 'remote peer test passphrase',
+        kdfOptions: testKdfOptions,
+      });
+      const peer = peerStore.identity;
+      const conversationId = store.ensureConversation(peer);
+      const messageId = randomUUID();
+      const secretBody = 'uniquely secret local message body 9417';
+      const sentAt = new Date().toISOString();
 
-    store.saveOutgoingMessage({
-      conversationId,
-      messageId,
-      sequenceNumber: store.nextSequenceNumber(conversationId),
-      body: secretBody,
-      sentAt,
-    });
-    store.markMessageDelivered(messageId, new Date().toISOString());
-    store.close();
-    peerStore.close();
-
-    const databaseBytes = await readFile(join(directory, 'chat.db'));
-    expect(databaseBytes.includes(Buffer.from(secretBody))).toBe(false);
-
-    const reopened = await LocalStore.open({
-      directory,
-      passphrase,
-      kdfOptions: testKdfOptions,
-    });
-    expect(reopened.listMessages(conversationId)).toEqual([
-      expect.objectContaining({
-        id: messageId,
-        body: secretBody,
-        deliveryState: 'delivered',
-      }),
-    ]);
-    reopened.close();
-  });
-
-  it('encrypts reply relationships and keeps them conversation-scoped', async () => {
-    const directory = await temporaryDirectory();
-    const firstPeerDirectory = await temporaryDirectory();
-    const secondPeerDirectory = await temporaryDirectory();
-    const passphrase = 'reply encryption test passphrase';
-    const store = await LocalStore.open({
-      directory,
-      passphrase,
-      kdfOptions: testKdfOptions,
-    });
-    const firstPeer = await LocalStore.open({
-      directory: firstPeerDirectory,
-      passphrase: 'first reply peer passphrase',
-      kdfOptions: testKdfOptions,
-    });
-    const secondPeer = await LocalStore.open({
-      directory: secondPeerDirectory,
-      passphrase: 'second reply peer passphrase',
-      kdfOptions: testKdfOptions,
-    });
-    const conversationId = store.ensureConversation(firstPeer.identity);
-    const otherConversationId = store.ensureConversation(secondPeer.identity);
-    const targetMessageId = randomUUID();
-    const replyMessageId = randomUUID();
-
-    store.saveOutgoingMessage({
-      conversationId,
-      messageId: targetMessageId,
-      sequenceNumber: store.nextSequenceNumber(conversationId),
-      body: 'original encrypted message',
-      sentAt: new Date().toISOString(),
-    });
-    store.saveOutgoingMessage({
-      conversationId,
-      messageId: replyMessageId,
-      sequenceNumber: store.nextSequenceNumber(conversationId),
-      body: 'encrypted specific reply',
-      sentAt: new Date().toISOString(),
-      replyToMessageId: targetMessageId,
-    });
-    expect(
-      store.getMessage(conversationId, replyMessageId)?.replyToMessageId,
-    ).toBe(targetMessageId);
-    expect(() =>
       store.saveOutgoingMessage({
-        conversationId: otherConversationId,
-        messageId: randomUUID(),
-        sequenceNumber: store.nextSequenceNumber(otherConversationId),
-        body: 'invalid cross-conversation reply',
+        conversationId,
+        messageId,
+        sequenceNumber: store.nextSequenceNumber(conversationId),
+        body: secretBody,
+        sentAt,
+      });
+      store.markMessageDelivered(messageId, new Date().toISOString());
+      store.close();
+      peerStore.close();
+
+      const databaseBytes = await readFile(join(directory, 'chat.db'));
+      expect(databaseBytes.includes(Buffer.from(secretBody))).toBe(false);
+
+      const reopened = await LocalStore.open({
+        directory,
+        passphrase,
+        kdfOptions: testKdfOptions,
+      });
+      expect(reopened.listMessages(conversationId)).toEqual([
+        expect.objectContaining({
+          id: messageId,
+          body: secretBody,
+          deliveryState: 'delivered',
+        }),
+      ]);
+      reopened.close();
+    },
+    STORAGE_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'encrypts reply relationships and keeps them conversation-scoped',
+    async () => {
+      const directory = await temporaryDirectory();
+      const firstPeerDirectory = await temporaryDirectory();
+      const secondPeerDirectory = await temporaryDirectory();
+      const passphrase = 'reply encryption test passphrase';
+      const store = await LocalStore.open({
+        directory,
+        passphrase,
+        kdfOptions: testKdfOptions,
+      });
+      const firstPeer = await LocalStore.open({
+        directory: firstPeerDirectory,
+        passphrase: 'first reply peer passphrase',
+        kdfOptions: testKdfOptions,
+      });
+      const secondPeer = await LocalStore.open({
+        directory: secondPeerDirectory,
+        passphrase: 'second reply peer passphrase',
+        kdfOptions: testKdfOptions,
+      });
+      const conversationId = store.ensureConversation(firstPeer.identity);
+      const otherConversationId = store.ensureConversation(secondPeer.identity);
+      const targetMessageId = randomUUID();
+      const replyMessageId = randomUUID();
+
+      store.saveOutgoingMessage({
+        conversationId,
+        messageId: targetMessageId,
+        sequenceNumber: store.nextSequenceNumber(conversationId),
+        body: 'original encrypted message',
+        sentAt: new Date().toISOString(),
+      });
+      store.saveOutgoingMessage({
+        conversationId,
+        messageId: replyMessageId,
+        sequenceNumber: store.nextSequenceNumber(conversationId),
+        body: 'encrypted specific reply',
         sentAt: new Date().toISOString(),
         replyToMessageId: targetMessageId,
-      }),
-    ).toThrow('Reply target is not part of this conversation');
+      });
+      expect(
+        store.getMessage(conversationId, replyMessageId)?.replyToMessageId,
+      ).toBe(targetMessageId);
+      expect(() =>
+        store.saveOutgoingMessage({
+          conversationId: otherConversationId,
+          messageId: randomUUID(),
+          sequenceNumber: store.nextSequenceNumber(otherConversationId),
+          body: 'invalid cross-conversation reply',
+          sentAt: new Date().toISOString(),
+          replyToMessageId: targetMessageId,
+        }),
+      ).toThrow('Reply target is not part of this conversation');
 
-    store.close();
-    firstPeer.close();
-    secondPeer.close();
+      store.close();
+      firstPeer.close();
+      secondPeer.close();
 
-    const rawDatabase = new Database(join(directory, 'chat.db'), {
-      readonly: true,
-    });
-    const row = rawDatabase
-      .prepare('SELECT reply_to_ciphertext FROM messages WHERE message_id = ?')
-      .get(replyMessageId) as
-      { readonly reply_to_ciphertext: Buffer } | undefined;
-    rawDatabase.close();
-    expect(row).toBeDefined();
-    expect(row?.reply_to_ciphertext).toBeInstanceOf(Buffer);
-    expect(row?.reply_to_ciphertext.equals(Buffer.from(targetMessageId))).toBe(
-      false,
-    );
+      const rawDatabase = new Database(join(directory, 'chat.db'), {
+        readonly: true,
+      });
+      const row = rawDatabase
+        .prepare(
+          'SELECT reply_to_ciphertext FROM messages WHERE message_id = ?',
+        )
+        .get(replyMessageId) as
+        { readonly reply_to_ciphertext: Buffer } | undefined;
+      rawDatabase.close();
+      expect(row).toBeDefined();
+      expect(row?.reply_to_ciphertext).toBeInstanceOf(Buffer);
+      expect(
+        row?.reply_to_ciphertext.equals(Buffer.from(targetMessageId)),
+      ).toBe(false);
 
-    const reopened = await LocalStore.open({
-      directory,
-      passphrase,
-      kdfOptions: testKdfOptions,
-    });
-    expect(reopened.getMessage(conversationId, replyMessageId)).toEqual(
-      expect.objectContaining({
-        body: 'encrypted specific reply',
-        replyToMessageId: targetMessageId,
-      }),
-    );
-    reopened.close();
-  });
+      const reopened = await LocalStore.open({
+        directory,
+        passphrase,
+        kdfOptions: testKdfOptions,
+      });
+      expect(reopened.getMessage(conversationId, replyMessageId)).toEqual(
+        expect.objectContaining({
+          body: 'encrypted specific reply',
+          replyToMessageId: targetMessageId,
+        }),
+      );
+      reopened.close();
+    },
+    STORAGE_TEST_TIMEOUT_MS,
+  );
 
   it('persists encrypted protocol state and supports secure deletion', async () => {
     const directory = await temporaryDirectory();

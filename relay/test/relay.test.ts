@@ -2,6 +2,8 @@ import { exports } from 'cloudflare:workers';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
+import { APP_VERSION } from '../../src/core/version.js';
+
 const ticketResponseSchema = z.object({
   status: z.literal('ok'),
   ticket: z.string(),
@@ -17,11 +19,11 @@ describe('p2pchat relay', () => {
       'text/x-shellscript',
     );
     expect(installer.headers.get('X-Content-Type-Options')).toBe('nosniff');
-    expect(installer.headers.get('X-p2pchat-Version')).toBe('0.6.0');
+    expect(installer.headers.get('X-p2pchat-Version')).toBe(APP_VERSION);
     const script = await installer.text();
     expect(script).toMatch(/^#!\/bin\/sh\nset -eu/u);
     expect(script).toContain(
-      "package_name='@ashrithsathu/p2pchat'\npackage_version='0.6.0'",
+      `package_name='@ashrithsathu/p2pchat'\npackage_version='${APP_VERSION}'`,
     );
     expect(script).toContain('npm install --global');
     expect(script).not.toMatch(/^\s*sudo\s/mu);
