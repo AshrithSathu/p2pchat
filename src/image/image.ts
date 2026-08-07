@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
-import { readFile, stat } from 'node:fs/promises';
+import { constants } from 'node:fs';
+import { open } from 'node:fs/promises';
 import { basename } from 'node:path';
 
 import { getImageDimensions } from '@earendil-works/pi-tui';
@@ -35,18 +36,38 @@ export class InvalidImageError extends Error {
 }
 
 export async function loadImageFile(path: string): Promise<PreparedImage> {
-  const details = await stat(path);
-  if (!details.isFile()) {
-    throw new InvalidImageError('Dropped image path is not a regular file');
-  }
-  if (details.size === 0) {
-    throw new InvalidImageError('Image is empty');
-  }
-  if (details.size > MAX_IMAGE_BYTES) {
-    throw new InvalidImageError('Image exceeds the 2 MiB limit');
-  }
+  const handle = await open(path, constants.O_RDONLY | constants.O_NONBLOCK);
+  try {
+    const details = await handle.stat();
+    if (!details.isFile()) {
+      throw new InvalidImageError('Dropped image path is not a regular file');
+    }
+    if (details.size === 0) {
+      throw new InvalidImageError('Image is empty');
+    }
+    if (details.size > MAX_IMAGE_BYTES) {
+      throw new InvalidImageError('Image exceeds the 2 MiB limit');
+    }
 
-  return prepareImage(await readFile(path), basename(path));
+    const bytes = Buffer.allocUnsafe(MAX_IMAGE_BYTES + 1);
+    let byteLength = 0;
+    while (byteLength < bytes.byteLength) {
+      const { bytesRead } = await handle.read(
+        bytes,
+        byteLength,
+        bytes.byteLength - byteLength,
+        null,
+      );
+      if (bytesRead === 0) {
+        break;
+      }
+      byteLength += bytesRead;
+    }
+
+    return prepareImage(bytes.subarray(0, byteLength), basename(path));
+  } finally {
+    await handle.close();
+  }
 }
 
 export function prepareImage(
