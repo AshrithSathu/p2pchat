@@ -4,6 +4,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing release tag to publish again (for example, v0.6.0)
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -35,7 +40,7 @@ jobs:
   publish:
     name: Publish packages
     needs: release
-    if: ${{ needs.release.outputs.release_created == 'true' }}
+    if: ${{ needs.release.outputs.release_created == 'true' || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '') }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -43,7 +48,7 @@ jobs:
       id-token: write
       packages: write
     env:
-      RELEASE_TAG: ${{ needs.release.outputs.tag_name }}
+      RELEASE_TAG: ${{ needs.release.outputs.tag_name || inputs.release_tag }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -75,7 +80,7 @@ jobs:
         run: gh release upload "$RELEASE_TAG" release/* --clobber
       - name: Publish to npm
         run: >-
-          npm publish release/*.tgz
+          npm publish ./release/*.tgz
           --registry=https://registry.npmjs.org
           --access public
       - name: Configure GitHub Packages
@@ -86,7 +91,7 @@ jobs:
           scope: '@ashrithsathu'
           package-manager-cache: false
       - name: Publish to GitHub Packages
-        run: npm publish release/*.tgz --registry=https://npm.pkg.github.com
+        run: npm publish ./release/*.tgz --registry=https://npm.pkg.github.com
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
