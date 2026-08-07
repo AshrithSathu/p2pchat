@@ -1,3 +1,7 @@
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
 import { describe, expect, it } from 'vitest';
 
 import { extractDroppedFilePath } from './image-input.js';
@@ -16,9 +20,8 @@ describe('extractDroppedFilePath', () => {
   });
 
   it('accepts file URLs and rejects multiline text', () => {
-    expect(extractDroppedFilePath('file:///tmp/My%20photo.png')).toBe(
-      '/tmp/My photo.png',
-    );
+    const path = join(tmpdir(), 'My photo.png');
+    expect(extractDroppedFilePath(pathToFileURL(path).href)).toBe(path);
     expect(extractDroppedFilePath('hello\nworld')).toBeNull();
   });
 });
