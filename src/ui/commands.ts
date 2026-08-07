@@ -14,6 +14,7 @@ export type UiAction =
   | Readonly<{ kind: 'new-local-chat' }>
   | Readonly<{ kind: 'license' }>
   | Readonly<{ kind: 'quit' }>
+  | Readonly<{ kind: 'reply' }>
   | Readonly<{ kind: 'source' }>;
 
 export const UI_COMMAND_SUGGESTIONS = [
@@ -26,6 +27,7 @@ export const UI_COMMAND_SUGGESTIONS = [
   },
   { name: 'help', description: 'Show all commands' },
   { name: 'clear', description: 'Clear the activity panel' },
+  { name: 'reply', description: 'Reply to a specific message' },
   { name: 'source', description: 'Show the exact release source' },
   { name: 'license', description: 'Show licensing information' },
   { name: 'quit', description: 'Exit safely' },
@@ -84,6 +86,8 @@ export function parseUiCommand(input: string): UiAction | null {
     case '/quit':
     case '/exit':
       return { kind: 'quit' };
+    case '/reply':
+      return { kind: 'reply' };
     case '/source':
       return { kind: 'source' };
     default:

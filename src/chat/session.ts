@@ -63,7 +63,14 @@ export class ChatSession {
     return this.#store.listMessages(this.conversationId, limit);
   }
 
-  public async send(body: string): Promise<string> {
+  public message(messageId: string): StoredMessage | null {
+    return this.#store.getMessage(this.conversationId, messageId);
+  }
+
+  public async send(
+    body: string,
+    replyToMessageId: string | null = null,
+  ): Promise<string> {
     this.#assertOpen();
     const safeBody = prepareMessageBody(body);
     const message: ChatMessage = {
@@ -73,6 +80,7 @@ export class ChatSession {
       sequenceNumber: this.#store.nextSequenceNumber(this.conversationId),
       sentAt: new Date().toISOString(),
       body: safeBody,
+      ...(replyToMessageId === null ? {} : { replyToMessageId }),
     };
 
     this.#store.saveOutgoingMessage({
@@ -81,13 +89,18 @@ export class ChatSession {
       sequenceNumber: message.sequenceNumber,
       body: message.body,
       sentAt: message.sentAt,
+      replyToMessageId,
     });
     await this.#write(message);
     this.#store.markMessageSent(message.messageId);
     return message.messageId;
   }
 
-  public async sendImage(image: PreparedImage, body = ''): Promise<string> {
+  public async sendImage(
+    image: PreparedImage,
+    body = '',
+    replyToMessageId: string | null = null,
+  ): Promise<string> {
     this.#assertOpen();
     if (!this.supportsImages) {
       throw new Error(
@@ -106,6 +119,7 @@ export class ChatSession {
       sequenceNumber: this.#store.nextSequenceNumber(this.conversationId),
       sentAt: new Date().toISOString(),
       body: safeBody,
+      ...(replyToMessageId === null ? {} : { replyToMessageId }),
       attachmentId,
       filename: safeImage.filename,
       mimeType: safeImage.mimeType,
@@ -121,6 +135,7 @@ export class ChatSession {
         sequenceNumber: message.sequenceNumber,
         body: safeBody,
         sentAt: message.sentAt,
+        replyToMessageId,
         image: { ...safeImage, id: attachmentId },
       });
 
@@ -219,6 +234,7 @@ export class ChatSession {
       body,
       sentAt: message.sentAt,
       receivedAt,
+      replyToMessageId: message.replyToMessageId ?? null,
     });
     const acknowledgement: Acknowledgement = {
       type: 'ack',
@@ -313,6 +329,7 @@ export class ChatSession {
       body,
       sentAt: transfer.message.sentAt,
       receivedAt,
+      replyToMessageId: transfer.message.replyToMessageId ?? null,
       image: { ...image, id: transfer.message.attachmentId },
     });
     image.bytes.fill(0);

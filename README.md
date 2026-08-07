@@ -79,6 +79,17 @@ On the second device:
 Messages can be typed normally after authentication. `✓✓` means the peer
 acknowledged receipt.
 
+## Reply to a message
+
+Press `Ctrl+R` or run `/reply` to open the recent-message picker. Use Up/Down
+to choose the exact message, Enter to select it, and Escape to cancel. The
+composer shows a compact quote; type a response or attach an image and press
+Enter to send.
+
+The reply reference travels inside the Signal-encrypted message and is stored
+as a separate encrypted value in the local database. A reply can only target a
+message from the same conversation.
+
 ## Send images
 
 Copy an image and press `Ctrl+V` in p2pchat (`Alt+V` on Windows), or drop an
@@ -97,6 +108,7 @@ metadata fallback.
 | `/new`         | Create a short-lived Internet invitation       |
 | `/new-local`   | Create a direct invitation for reachable peers |
 | `/join <code>` | Join an Internet or direct invitation          |
+| `/reply`       | Reply to a specific recent message             |
 | `/clear`       | Clear the activity panel                       |
 | `/help`        | Show command help                              |
 | `/source`      | Show source corresponding to this version      |
@@ -162,6 +174,9 @@ self-hosted relay.
 - Image content and image metadata, including filenames and MIME types, are
   stored in separate AES-256-GCM envelopes. Only attachment byte length and the
   same message-routing metadata described below remain visible in SQLite.
+- Reply relationships are carried inside Signal ciphertext and stored as
+  AES-256-GCM ciphertext; the quoted text is derived locally from message
+  history rather than duplicated in the protocol or database.
 - Profile directories use owner-only permissions on supported operating
   systems, and SQLite secure deletion is enabled.
 - Received messages are stripped of terminal control and bidirectional override

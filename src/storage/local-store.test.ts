@@ -3,6 +3,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { prepareImage } from '../image/image.js';
@@ -151,6 +152,92 @@ describe('LocalStore', () => {
         deliveryState: 'delivered',
       }),
     ]);
+    reopened.close();
+  });
+
+  it('encrypts reply relationships and keeps them conversation-scoped', async () => {
+    const directory = await temporaryDirectory();
+    const firstPeerDirectory = await temporaryDirectory();
+    const secondPeerDirectory = await temporaryDirectory();
+    const passphrase = 'reply encryption test passphrase';
+    const store = await LocalStore.open({
+      directory,
+      passphrase,
+      kdfOptions: testKdfOptions,
+    });
+    const firstPeer = await LocalStore.open({
+      directory: firstPeerDirectory,
+      passphrase: 'first reply peer passphrase',
+      kdfOptions: testKdfOptions,
+    });
+    const secondPeer = await LocalStore.open({
+      directory: secondPeerDirectory,
+      passphrase: 'second reply peer passphrase',
+      kdfOptions: testKdfOptions,
+    });
+    const conversationId = store.ensureConversation(firstPeer.identity);
+    const otherConversationId = store.ensureConversation(secondPeer.identity);
+    const targetMessageId = randomUUID();
+    const replyMessageId = randomUUID();
+
+    store.saveOutgoingMessage({
+      conversationId,
+      messageId: targetMessageId,
+      sequenceNumber: store.nextSequenceNumber(conversationId),
+      body: 'original encrypted message',
+      sentAt: new Date().toISOString(),
+    });
+    store.saveOutgoingMessage({
+      conversationId,
+      messageId: replyMessageId,
+      sequenceNumber: store.nextSequenceNumber(conversationId),
+      body: 'encrypted specific reply',
+      sentAt: new Date().toISOString(),
+      replyToMessageId: targetMessageId,
+    });
+    expect(
+      store.getMessage(conversationId, replyMessageId)?.replyToMessageId,
+    ).toBe(targetMessageId);
+    expect(() =>
+      store.saveOutgoingMessage({
+        conversationId: otherConversationId,
+        messageId: randomUUID(),
+        sequenceNumber: store.nextSequenceNumber(otherConversationId),
+        body: 'invalid cross-conversation reply',
+        sentAt: new Date().toISOString(),
+        replyToMessageId: targetMessageId,
+      }),
+    ).toThrow('Reply target is not part of this conversation');
+
+    store.close();
+    firstPeer.close();
+    secondPeer.close();
+
+    const rawDatabase = new Database(join(directory, 'chat.db'), {
+      readonly: true,
+    });
+    const row = rawDatabase
+      .prepare('SELECT reply_to_ciphertext FROM messages WHERE message_id = ?')
+      .get(replyMessageId) as
+      { readonly reply_to_ciphertext: Buffer } | undefined;
+    rawDatabase.close();
+    expect(row).toBeDefined();
+    expect(row?.reply_to_ciphertext).toBeInstanceOf(Buffer);
+    expect(row?.reply_to_ciphertext.equals(Buffer.from(targetMessageId))).toBe(
+      false,
+    );
+
+    const reopened = await LocalStore.open({
+      directory,
+      passphrase,
+      kdfOptions: testKdfOptions,
+    });
+    expect(reopened.getMessage(conversationId, replyMessageId)).toEqual(
+      expect.objectContaining({
+        body: 'encrypted specific reply',
+        replyToMessageId: targetMessageId,
+      }),
+    );
     reopened.close();
   });
 

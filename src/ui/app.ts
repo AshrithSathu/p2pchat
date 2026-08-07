@@ -6,10 +6,14 @@ import {
   Key,
   matchesKey,
   ProcessTerminal,
+  SelectList,
   Spacer,
   Text,
   TUI,
+  type Component,
   type EditorTheme,
+  type OverlayHandle,
+  type SelectItem,
   type SelectListTheme,
 } from '@earendil-works/pi-tui';
 
@@ -40,6 +44,7 @@ import {
   type UiAction,
 } from './commands.js';
 import { extractDroppedFilePath, readClipboardContent } from './image-input.js';
+import { createReplySelectItems, formatReplyPreview } from './replies.js';
 
 const selectListTheme: SelectListTheme = {
   selectedPrefix: ansi.cyan,
@@ -60,11 +65,54 @@ const CHAT_IMAGE_MAX_WIDTH = 44;
 const CHAT_IMAGE_MAX_HEIGHT = 12;
 const PENDING_IMAGE_MAX_WIDTH = 36;
 const PENDING_IMAGE_MAX_HEIGHT = 9;
+const REPLY_PICKER_MAX_VISIBLE = 8;
+
+class ReplyPicker implements Component {
+  readonly #list: SelectList;
+
+  public constructor(
+    items: SelectItem[],
+    onSelect: (messageId: string) => void,
+    onCancel: () => void,
+  ) {
+    this.#list = new SelectList(
+      items,
+      REPLY_PICKER_MAX_VISIBLE,
+      selectListTheme,
+      {
+        minPrimaryColumnWidth: 18,
+        maxPrimaryColumnWidth: 24,
+      },
+    );
+    this.#list.onSelect = (item) => {
+      onSelect(item.value);
+    };
+    this.#list.onCancel = onCancel;
+  }
+
+  public render(width: number): string[] {
+    return [
+      ansi.bold('Reply to a message'),
+      ansi.dim('↑/↓ choose  ·  Enter select  ·  Esc cancel'),
+      '',
+      ...this.#list.render(width),
+    ];
+  }
+
+  public handleInput(data: string): void {
+    this.#list.handleInput(data);
+  }
+
+  public invalidate(): void {
+    this.#list.invalidate();
+  }
+}
 
 const HELP_TEXT = `${ansi.bold('Commands')}
 ${ansi.cyan('/new')}          Create an Internet chat
 ${ansi.cyan('/new-local')}    Create a direct LAN chat
 ${ansi.cyan('/join <code>')}  Join using an invite code
+${ansi.cyan('/reply')}        Reply to a specific message
 ${ansi.cyan('/clear')}        Clear this activity panel
 ${ansi.cyan('/source')}       Show the exact release source
 ${ansi.cyan('/license')}      Show licensing information
@@ -89,6 +137,7 @@ function createLayout(
   const root = new Container();
   const header = new Box(1, 1);
   const activity = new Container();
+  const pendingReply = new Container();
   const pendingAttachment = new Container();
   const editor = new Editor(tui, editorTheme, {
     paddingX: 1,
@@ -106,6 +155,8 @@ function createLayout(
   let currentChat: ChatSession | null = null;
   let pendingInvite: InviteHandle | null = null;
   let disconnectedReason: string | null = null;
+  let replyToMessageId: string | null = null;
+  let replyPickerOverlay: OverlayHandle | null = null;
   let pendingImage: PreparedImage | null = null;
   let bracketedPasteBuffer: string | null = null;
   let clipboardBusy = false;
@@ -137,7 +188,10 @@ function createLayout(
     tui.requestRender();
   };
 
-  const formatMessage = (message: StoredMessage): string => {
+  const formatMessage = (
+    message: StoredMessage,
+    replyTarget: StoredMessage | null,
+  ): string => {
     const fromSelf = message.senderPeerId === identity.id;
     const author = fromSelf ? ansi.cyan('you') : ansi.green('peer');
     const time = new Date(message.sentAt).toLocaleTimeString([], {
@@ -153,9 +207,26 @@ function createLayout(
             ? ansi.green(' ✓✓')
             : '';
     const body = message.body.replaceAll('\n', '\n    ');
-    return body.length > 0
-      ? `${ansi.dim(time)} ${author}${state}\n    ${body}`
-      : `${ansi.dim(time)} ${author}${state}`;
+    const lines = [`${ansi.dim(time)} ${author}${state}`];
+    if (message.replyToMessageId !== null) {
+      if (replyTarget === null) {
+        lines.push(`    ${ansi.dim('↪ earlier message')}`);
+      } else {
+        const replyAuthor =
+          replyTarget.senderPeerId === identity.id
+            ? ansi.cyan('you')
+            : ansi.green('peer');
+        lines.push(
+          `    ${ansi.dim('↪')} ${replyAuthor} ${ansi.dim(
+            `· ${formatReplyPreview(replyTarget)}`,
+          )}`,
+        );
+      }
+    }
+    if (body.length > 0) {
+      lines.push(`    ${body}`);
+    }
+    return lines.join('\n');
   };
 
   const renderStoredImage = (
@@ -208,6 +279,20 @@ function createLayout(
     }
 
     const messages = currentChat.history(100);
+    const messagesById = new Map(
+      messages.map((message) => [message.id, message] as const),
+    );
+    for (const message of messages) {
+      if (
+        message.replyToMessageId !== null &&
+        !messagesById.has(message.replyToMessageId)
+      ) {
+        const replyTarget = currentChat.message(message.replyToMessageId);
+        if (replyTarget !== null) {
+          messagesById.set(replyTarget.id, replyTarget);
+        }
+      }
+    }
     const inlineImageIds = new Set(
       messages
         .flatMap((message) =>
@@ -248,7 +333,18 @@ function createLayout(
     } else {
       for (const message of messages) {
         activity.addChild(new Spacer(1));
-        activity.addChild(new Text(formatMessage(message), 1, 0));
+        activity.addChild(
+          new Text(
+            formatMessage(
+              message,
+              message.replyToMessageId === null
+                ? null
+                : (messagesById.get(message.replyToMessageId) ?? null),
+            ),
+            1,
+            0,
+          ),
+        );
         renderStoredImage(
           message,
           message.image !== null && inlineImageIds.has(message.image.id),
@@ -265,10 +361,86 @@ function createLayout(
     renderChat();
   };
 
+  const renderPendingReply = (): void => {
+    pendingReply.clear();
+    if (replyToMessageId === null || currentChat === null) {
+      tui.requestRender();
+      return;
+    }
+    const target = currentChat.message(replyToMessageId);
+    if (target === null) {
+      replyToMessageId = null;
+      tui.requestRender();
+      return;
+    }
+    const author =
+      target.senderPeerId === identity.id
+        ? ansi.cyan('you')
+        : ansi.green('peer');
+    pendingReply.addChild(
+      new Text(
+        `${ansi.green('↪ replying to')} ${author} ${ansi.dim(
+          `· ${formatReplyPreview(target)}`,
+        )}\n${ansi.dim('Type your reply, then press Enter. Esc cancels the reply.')}`,
+        1,
+        0,
+      ),
+    );
+    tui.requestRender();
+  };
+
+  const closeReplyPicker = (): void => {
+    replyPickerOverlay?.hide();
+    replyPickerOverlay = null;
+    tui.setFocus(editor);
+    tui.requestRender();
+  };
+
+  const openReplyPicker = (): void => {
+    if (currentChat === null) {
+      setActivityText(
+        `${ansi.yellow('No peer connected')}\nCreate or join a chat before replying.`,
+      );
+      tui.requestRender();
+      return;
+    }
+    if (replyPickerOverlay !== null) {
+      replyPickerOverlay.focus();
+      return;
+    }
+    const items = createReplySelectItems(currentChat.history(50), identity.id);
+    if (items.length === 0) {
+      setActivityText(
+        `${ansi.yellow('Nothing to reply to')}\nSend or receive a message first.`,
+      );
+      tui.requestRender();
+      return;
+    }
+    const picker = new ReplyPicker(
+      items,
+      (messageId) => {
+        replyToMessageId = messageId;
+        closeReplyPicker();
+        renderPendingReply();
+      },
+      closeReplyPicker,
+    );
+    replyPickerOverlay = tui.showOverlay(picker, {
+      width: '70%',
+      minWidth: 42,
+      maxHeight: '60%',
+      anchor: 'center',
+      margin: 2,
+    });
+    tui.requestRender();
+  };
+
   const showConnected = (session: AuthenticatedSession): void => {
     currentSession = session;
     disconnectedReason = null;
+    replyToMessageId = null;
     currentChat = new ChatSession(session, store);
+    renderPendingReply();
     renderChat();
     void currentChat.run(onChatEvent).catch(() => undefined);
   };
@@ -331,7 +503,9 @@ function createLayout(
           );
           break;
         }
-        await currentChat.send(action.body);
+        await currentChat.send(action.body, replyToMessageId);
+        replyToMessageId = null;
+        renderPendingReply();
         renderChat();
         break;
       case 'new-chat':
@@ -392,6 +566,9 @@ function createLayout(
         break;
       case 'quit':
         finish();
+        return;
+      case 'reply':
+        openReplyPicker();
         return;
       case 'source':
         setActivityText(
@@ -506,6 +683,11 @@ function createLayout(
       return { consume: true };
     }
 
+    if (matchesKey(data, Key.ctrl('r'))) {
+      openReplyPicker();
+      return { consume: true };
+    }
+
     const pasteImageKey =
       matchesKey(data, Key.ctrl('v')) ||
       (process.platform === 'win32' && matchesKey(data, Key.alt('v')));
@@ -530,6 +712,7 @@ function createLayout(
     }
 
     if (
+      replyPickerOverlay === null &&
       pendingImage !== null &&
       !imageSendBusy &&
       matchesKey(data, Key.escape)
@@ -537,6 +720,15 @@ function createLayout(
       pendingImage.bytes.fill(0);
       pendingImage = null;
       renderPendingImage();
+      return { consume: true };
+    }
+    if (
+      replyPickerOverlay === null &&
+      replyToMessageId !== null &&
+      matchesKey(data, Key.escape)
+    ) {
+      replyToMessageId = null;
+      renderPendingReply();
       return { consume: true };
     }
     return undefined;
@@ -555,6 +747,7 @@ function createLayout(
         return;
       }
       const image = pendingImage;
+      const imageReplyToMessageId = replyToMessageId;
       if (input.trim().length > 0) {
         editor.addToHistory(input);
       }
@@ -562,12 +755,16 @@ function createLayout(
       editor.disableSubmit = true;
       renderPendingImage();
       void currentChat
-        .sendImage(image, input)
+        .sendImage(image, input, imageReplyToMessageId)
         .then(() => {
           image.bytes.fill(0);
           if (pendingImage === image) {
             pendingImage = null;
           }
+          if (replyToMessageId === imageReplyToMessageId) {
+            replyToMessageId = null;
+          }
+          renderPendingReply();
           renderPendingImage();
           renderChat();
         })
@@ -605,6 +802,7 @@ function createLayout(
   root.addChild(new Spacer(1));
   root.addChild(activity);
   root.addChild(new Spacer(1));
+  root.addChild(pendingReply);
   root.addChild(pendingAttachment);
   root.addChild(new Text(ansi.dim('Type a message or command'), 1, 0));
   root.addChild(editor);
@@ -612,7 +810,9 @@ function createLayout(
     new Text(
       `${ansi.dim('Enter')} submit   ${ansi.dim('Shift+Enter')} newline   ${ansi.dim(
         'Ctrl+C',
-      )} quit   ${ansi.dim('Ctrl+V / drop')} image   ${ansi.dim('/')} actions`,
+      )} quit   ${ansi.dim('Ctrl+R')} reply   ${ansi.dim(
+        'Ctrl+V / drop',
+      )} image   ${ansi.dim('/')} actions`,
       1,
       0,
     ),
@@ -625,6 +825,7 @@ function createLayout(
     close: async () => {
       removeQuitInputListener();
       removeImageInputListener();
+      replyPickerOverlay?.hide();
       pendingImage?.bytes.fill(0);
       pendingInvite?.cancel();
       await currentChat?.close();

@@ -71,6 +71,8 @@ describe('P2PService', () => {
       const joinerChat = new ChatSession(joinerSession, joinerStore);
       const creatorReceived = Promise.withResolvers<undefined>();
       const joinerDelivered = Promise.withResolvers<undefined>();
+      const joinerReplyReceived = Promise.withResolvers<undefined>();
+      const creatorReplyDelivered = Promise.withResolvers<undefined>();
       const creatorImageReceived = Promise.withResolvers<undefined>();
       const joinerImageDelivered = Promise.withResolvers<undefined>();
       const creatorEvents: ChatEvent[] = [];
@@ -86,6 +88,8 @@ describe('P2PService', () => {
           } else if (creatorReceivedCount === 2) {
             creatorImageReceived.resolve(undefined);
           }
+        } else if (event.kind === 'delivered') {
+          creatorReplyDelivered.resolve(undefined);
         }
       });
       const joinerLoop = joinerChat.run((event) => {
@@ -97,6 +101,8 @@ describe('P2PService', () => {
           } else if (joinerDeliveredCount === 2) {
             joinerImageDelivered.resolve(undefined);
           }
+        } else if (event.kind === 'received') {
+          joinerReplyReceived.resolve(undefined);
         }
       });
 
@@ -122,6 +128,28 @@ describe('P2PService', () => {
       expect(creatorEvents).toContainEqual({ kind: 'received', messageId });
       expect(joinerEvents).toContainEqual({ kind: 'delivered', messageId });
 
+      const replyMessageId = await creatorChat.send(
+        'replying to that exact message',
+        messageId,
+      );
+      await Promise.all([
+        joinerReplyReceived.promise,
+        creatorReplyDelivered.promise,
+      ]);
+      expect(
+        joinerChat.history().find((message) => message.id === replyMessageId),
+      ).toEqual(
+        expect.objectContaining({
+          senderPeerId: creatorStore.identity.id,
+          body: 'replying to that exact message',
+          replyToMessageId: messageId,
+          deliveryState: 'received',
+        }),
+      );
+      expect(
+        creatorChat.history().find((message) => message.id === replyMessageId),
+      ).toEqual(expect.objectContaining({ deliveryState: 'delivered' }));
+
       const png = Buffer.from(
         'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
         'base64',
@@ -133,6 +161,7 @@ describe('P2PService', () => {
       const imageMessageId = await joinerChat.sendImage(
         image,
         'encrypted picture',
+        replyMessageId,
       );
       await Promise.all([
         creatorImageReceived.promise,
@@ -144,6 +173,7 @@ describe('P2PService', () => {
         .find((message) => message.id === imageMessageId);
       expect(receivedImageMessage?.body).toBe('encrypted picture');
       expect(receivedImageMessage?.deliveryState).toBe('received');
+      expect(receivedImageMessage?.replyToMessageId).toBe(replyMessageId);
       expect(receivedImageMessage?.image?.filename).toBe('test-picture.png');
       expect(receivedImageMessage?.image?.mimeType).toBe('image/png');
       expect(receivedImageMessage?.image?.byteLength).toBe(

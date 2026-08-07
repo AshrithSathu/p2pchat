@@ -3,7 +3,30 @@ import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 
 import { expectedImageChunkCount, MAX_IMAGE_BYTES } from '../image/image.js';
-import { imageChunkSchema, imageMessageSchema } from './protocol.js';
+import {
+  chatMessageSchema,
+  imageChunkSchema,
+  imageMessageSchema,
+} from './protocol.js';
+
+describe('message reply protocol', () => {
+  it('accepts an optional UUID reply target and rejects malformed targets', () => {
+    const message = {
+      type: 'chat' as const,
+      version: 1 as const,
+      messageId: randomUUID(),
+      sequenceNumber: 1,
+      sentAt: new Date().toISOString(),
+      body: 'a specific reply',
+      replyToMessageId: randomUUID(),
+    };
+
+    expect(chatMessageSchema.parse(message)).toEqual(message);
+    expect(() =>
+      chatMessageSchema.parse({ ...message, replyToMessageId: 'not-a-uuid' }),
+    ).toThrow();
+  });
+});
 
 describe('image protocol', () => {
   it('accepts bounded image metadata with an exact chunk count', () => {
@@ -16,6 +39,7 @@ describe('image protocol', () => {
         sequenceNumber: 0,
         sentAt: new Date().toISOString(),
         body: '',
+        replyToMessageId: randomUUID(),
         attachmentId: randomUUID(),
         filename: 'picture.png',
         mimeType: 'image/png',

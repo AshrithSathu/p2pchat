@@ -53,6 +53,7 @@ export const chatMessageSchema = z.object({
   sequenceNumber: z.number().int().nonnegative(),
   sentAt: z.iso.datetime(),
   body: z.string().min(1).max(16_384),
+  replyToMessageId: z.uuid().optional(),
 });
 
 export const acknowledgementSchema = z.object({
@@ -70,6 +71,7 @@ export const imageMessageSchema = z
     sequenceNumber: z.number().int().nonnegative(),
     sentAt: z.iso.datetime(),
     body: z.string().max(16_384),
+    replyToMessageId: z.uuid().optional(),
     attachmentId: z.uuid(),
     filename: z.string().min(1).max(160),
     mimeType: z.enum(SUPPORTED_IMAGE_MIME_TYPES),

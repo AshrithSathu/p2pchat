@@ -65,6 +65,7 @@ const SCHEMA = `
     sender_peer_id TEXT NOT NULL,
     sequence_number INTEGER NOT NULL,
     body_ciphertext BLOB NOT NULL,
+    reply_to_ciphertext BLOB,
     sent_at TEXT NOT NULL,
     received_at TEXT,
     delivery_state TEXT NOT NULL CHECK (
@@ -118,6 +119,10 @@ interface MessageIdRow {
   readonly message_id: string;
 }
 
+interface TableInfoRow {
+  readonly name: string;
+}
+
 interface SecureStateRow {
   readonly value_ciphertext: Buffer;
 }
@@ -128,6 +133,7 @@ interface MessageRow {
   readonly sender_peer_id: string;
   readonly sequence_number: number;
   readonly body_ciphertext: Buffer;
+  readonly reply_to_ciphertext: Buffer | null;
   readonly sent_at: string;
   readonly received_at: string | null;
   readonly delivery_state: MessageDeliveryState;
@@ -169,6 +175,7 @@ export interface StoredMessage {
   readonly senderPeerId: string;
   readonly sequenceNumber: number;
   readonly body: string;
+  readonly replyToMessageId: string | null;
   readonly sentAt: string;
   readonly receivedAt: string | null;
   readonly deliveryState: MessageDeliveryState;
@@ -188,6 +195,7 @@ export interface OutgoingMessageInput {
   readonly sequenceNumber: number;
   readonly body: string;
   readonly sentAt: string;
+  readonly replyToMessageId?: string | null;
 }
 
 export interface IncomingMessageInput extends OutgoingMessageInput {
@@ -207,6 +215,15 @@ export class InvalidPassphraseError extends Error {
   public constructor() {
     super('The local passphrase is incorrect.');
     this.name = 'InvalidPassphraseError';
+  }
+}
+
+function migrateSchema(database: Database.Database): void {
+  const messageColumns = database
+    .prepare<[], TableInfoRow>('PRAGMA table_info(messages)')
+    .all();
+  if (!messageColumns.some((column) => column.name === 'reply_to_ciphertext')) {
+    database.exec('ALTER TABLE messages ADD COLUMN reply_to_ciphertext BLOB');
   }
 }
 
@@ -282,6 +299,7 @@ export class LocalStore {
     database.pragma('synchronous = FULL');
     database.pragma('secure_delete = ON');
     database.exec(SCHEMA);
+    migrateSchema(database);
     await chmod(databasePath, 0o600);
 
     const selectMetadata = database.prepare<[string], MetadataRow>(
@@ -555,17 +573,21 @@ export class LocalStore {
 
   public saveOutgoingMessage(input: OutgoingMessageInput): void {
     this.#assertOpen();
+    this.#assertReplyTarget(input.conversationId, input.replyToMessageId);
     const ciphertext = this.encrypt(
       Buffer.from(input.body, 'utf8'),
       messageContext(input.messageId),
     );
+    const replyToCiphertext = encryptReplyReference(this, input);
     this.#database.transaction(() => {
       this.#database
-        .prepare<[string, string, string, number, Buffer, string]>(
+        .prepare<
+          [string, string, string, number, Buffer, Buffer | null, string]
+        >(
           `INSERT INTO messages
             (message_id, conversation_id, sender_peer_id, sequence_number,
-             body_ciphertext, sent_at, delivery_state)
-           VALUES (?, ?, ?, ?, ?, ?, 'pending')`,
+             body_ciphertext, reply_to_ciphertext, sent_at, delivery_state)
+           VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')`,
         )
         .run(
           input.messageId,
@@ -573,6 +595,7 @@ export class LocalStore {
           this.#identity.id,
           input.sequenceNumber,
           ciphertext,
+          replyToCiphertext,
           input.sentAt,
         );
       this.#touchConversation(input.conversationId, input.sentAt);
@@ -581,17 +604,31 @@ export class LocalStore {
 
   public saveIncomingMessage(input: IncomingMessageInput): boolean {
     this.#assertOpen();
+    this.#assertReplyTarget(input.conversationId, input.replyToMessageId);
     const ciphertext = this.encrypt(
       Buffer.from(input.body, 'utf8'),
       messageContext(input.messageId),
     );
+    const replyToCiphertext = encryptReplyReference(this, input);
     return this.#database.transaction(() => {
       const result = this.#database
-        .prepare<[string, string, string, number, Buffer, string, string]>(
+        .prepare<
+          [
+            string,
+            string,
+            string,
+            number,
+            Buffer,
+            Buffer | null,
+            string,
+            string,
+          ]
+        >(
           `INSERT OR IGNORE INTO messages
             (message_id, conversation_id, sender_peer_id, sequence_number,
-             body_ciphertext, sent_at, received_at, delivery_state)
-           VALUES (?, ?, ?, ?, ?, ?, ?, 'received')`,
+             body_ciphertext, reply_to_ciphertext, sent_at, received_at,
+             delivery_state)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'received')`,
         )
         .run(
           input.messageId,
@@ -599,6 +636,7 @@ export class LocalStore {
           input.senderPeerId,
           input.sequenceNumber,
           ciphertext,
+          replyToCiphertext,
           input.sentAt,
           input.receivedAt,
         );
@@ -623,19 +661,23 @@ export class LocalStore {
 
   public saveOutgoingImageMessage(input: OutgoingImageMessageInput): void {
     this.#assertOpen();
+    this.#assertReplyTarget(input.conversationId, input.replyToMessageId);
     const bodyCiphertext = this.encrypt(
       Buffer.from(input.body, 'utf8'),
       messageContext(input.messageId),
     );
+    const replyToCiphertext = encryptReplyReference(this, input);
     const attachment = encryptImageAttachment(this, input.image);
 
     this.#database.transaction(() => {
       this.#database
-        .prepare<[string, string, string, number, Buffer, string]>(
+        .prepare<
+          [string, string, string, number, Buffer, Buffer | null, string]
+        >(
           `INSERT INTO messages
             (message_id, conversation_id, sender_peer_id, sequence_number,
-             body_ciphertext, sent_at, delivery_state)
-           VALUES (?, ?, ?, ?, ?, ?, 'pending')`,
+             body_ciphertext, reply_to_ciphertext, sent_at, delivery_state)
+           VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')`,
         )
         .run(
           input.messageId,
@@ -643,6 +685,7 @@ export class LocalStore {
           this.#identity.id,
           input.sequenceNumber,
           bodyCiphertext,
+          replyToCiphertext,
           input.sentAt,
         );
       this.#insertImageAttachment(input.messageId, input.image, attachment);
@@ -652,19 +695,33 @@ export class LocalStore {
 
   public saveIncomingImageMessage(input: IncomingImageMessageInput): boolean {
     this.#assertOpen();
+    this.#assertReplyTarget(input.conversationId, input.replyToMessageId);
     const bodyCiphertext = this.encrypt(
       Buffer.from(input.body, 'utf8'),
       messageContext(input.messageId),
     );
+    const replyToCiphertext = encryptReplyReference(this, input);
     const attachment = encryptImageAttachment(this, input.image);
 
     return this.#database.transaction(() => {
       const result = this.#database
-        .prepare<[string, string, string, number, Buffer, string, string]>(
+        .prepare<
+          [
+            string,
+            string,
+            string,
+            number,
+            Buffer,
+            Buffer | null,
+            string,
+            string,
+          ]
+        >(
           `INSERT OR IGNORE INTO messages
             (message_id, conversation_id, sender_peer_id, sequence_number,
-             body_ciphertext, sent_at, received_at, delivery_state)
-           VALUES (?, ?, ?, ?, ?, ?, ?, 'received')`,
+             body_ciphertext, reply_to_ciphertext, sent_at, received_at,
+             delivery_state)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'received')`,
         )
         .run(
           input.messageId,
@@ -672,6 +729,7 @@ export class LocalStore {
           input.senderPeerId,
           input.sequenceNumber,
           bodyCiphertext,
+          replyToCiphertext,
           input.sentAt,
           input.receivedAt,
         );
@@ -719,6 +777,31 @@ export class LocalStore {
     return result.changes === 1;
   }
 
+  public getMessage(
+    conversationId: string,
+    messageId: string,
+  ): StoredMessage | null {
+    this.#assertOpen();
+    const row = this.#database
+      .prepare<[string, string], MessageRow>(
+        `SELECT messages.message_id, messages.conversation_id,
+                messages.sender_peer_id, messages.sequence_number,
+                messages.body_ciphertext, messages.reply_to_ciphertext,
+                messages.sent_at, messages.received_at,
+                messages.delivery_state,
+                message_attachments.attachment_id,
+                message_attachments.metadata_ciphertext
+                  AS attachment_metadata_ciphertext,
+                message_attachments.byte_length AS attachment_byte_length
+         FROM messages
+         LEFT JOIN message_attachments
+           ON message_attachments.message_id = messages.message_id
+         WHERE messages.conversation_id = ? AND messages.message_id = ?`,
+      )
+      .get(conversationId, messageId);
+    return row === undefined ? null : this.#decodeStoredMessage(row);
+  }
+
   public listMessages(
     conversationId: string,
     limit = 100,
@@ -731,14 +814,15 @@ export class LocalStore {
     const rows = this.#database
       .prepare<[string, number], MessageRow>(
         `SELECT message_id, conversation_id, sender_peer_id, sequence_number,
-                body_ciphertext, sent_at, received_at, delivery_state,
-                attachment_id, attachment_metadata_ciphertext,
-                attachment_byte_length
+                body_ciphertext, reply_to_ciphertext, sent_at, received_at,
+                delivery_state, attachment_id,
+                attachment_metadata_ciphertext, attachment_byte_length
          FROM (
            SELECT messages.message_id, messages.conversation_id,
                   messages.sender_peer_id, messages.sequence_number,
-                  messages.body_ciphertext, messages.sent_at,
-                  messages.received_at, messages.delivery_state,
+                  messages.body_ciphertext, messages.reply_to_ciphertext,
+                  messages.sent_at, messages.received_at,
+                  messages.delivery_state,
                   message_attachments.attachment_id,
                   message_attachments.metadata_ciphertext
                     AS attachment_metadata_ciphertext,
@@ -754,20 +838,7 @@ export class LocalStore {
       )
       .all(conversationId, limit);
 
-    return rows.map((row) => ({
-      id: row.message_id,
-      conversationId: row.conversation_id,
-      senderPeerId: row.sender_peer_id,
-      sequenceNumber: row.sequence_number,
-      body: this.decrypt(
-        row.body_ciphertext,
-        messageContext(row.message_id),
-      ).toString('utf8'),
-      sentAt: row.sent_at,
-      receivedAt: row.received_at,
-      deliveryState: row.delivery_state,
-      image: decodeStoredImageAttachment(this, row),
-    }));
+    return rows.map((row) => this.#decodeStoredMessage(row));
   }
 
   public readImageAttachment(attachmentId: string): Buffer {
@@ -809,6 +880,42 @@ export class LocalStore {
     }
   }
 
+  #assertReplyTarget(
+    conversationId: string,
+    replyToMessageId: string | null | undefined,
+  ): void {
+    if (replyToMessageId === null || replyToMessageId === undefined) {
+      return;
+    }
+    const target = this.#database
+      .prepare<[string, string], MessageIdRow>(
+        `SELECT message_id FROM messages
+         WHERE conversation_id = ? AND message_id = ?`,
+      )
+      .get(conversationId, replyToMessageId);
+    if (target === undefined) {
+      throw new Error('Reply target is not part of this conversation');
+    }
+  }
+
+  #decodeStoredMessage(row: MessageRow): StoredMessage {
+    return {
+      id: row.message_id,
+      conversationId: row.conversation_id,
+      senderPeerId: row.sender_peer_id,
+      sequenceNumber: row.sequence_number,
+      body: this.decrypt(
+        row.body_ciphertext,
+        messageContext(row.message_id),
+      ).toString('utf8'),
+      replyToMessageId: decodeReplyReference(this, row),
+      sentAt: row.sent_at,
+      receivedAt: row.received_at,
+      deliveryState: row.delivery_state,
+      image: decodeStoredImageAttachment(this, row),
+    };
+  }
+
   #touchConversation(conversationId: string, updatedAt: string): void {
     this.#database
       .prepare<[string, string]>(
@@ -841,6 +948,51 @@ export class LocalStore {
 
 function messageContext(messageId: string): string {
   return `message:${messageId}:body:v1`;
+}
+
+function replyReferenceContext(messageId: string): string {
+  return `message:${messageId}:reply:v1`;
+}
+
+function encryptReplyReference(
+  store: LocalStore,
+  input: OutgoingMessageInput,
+): Buffer | null {
+  if (input.replyToMessageId === null || input.replyToMessageId === undefined) {
+    return null;
+  }
+  return store.encrypt(
+    Buffer.from(input.replyToMessageId, 'utf8'),
+    replyReferenceContext(input.messageId),
+  );
+}
+
+function decodeReplyReference(
+  store: LocalStore,
+  row: MessageRow,
+): string | null {
+  if (row.reply_to_ciphertext === null) {
+    return null;
+  }
+  const plaintext = store.decrypt(
+    row.reply_to_ciphertext,
+    replyReferenceContext(row.message_id),
+  );
+  try {
+    const messageId = plaintext.toString('utf8');
+    if (!isUuid(messageId)) {
+      throw new Error('Encrypted reply reference is invalid');
+    }
+    return messageId;
+  } finally {
+    plaintext.fill(0);
+  }
+}
+
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(
+    value,
+  );
 }
 
 interface ImageAttachmentMetadata {
