@@ -1,5 +1,5 @@
 const PACKAGE_NAME = '@ashrithsathu/p2pchat';
-const PACKAGE_VERSION = '0.5.0';
+const PACKAGE_VERSION = '0.6.0'; // x-release-please-version
 
 export const INSTALL_SCRIPT = `#!/bin/sh
 set -eu

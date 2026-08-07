@@ -23,7 +23,8 @@ describe('parseUiCommand', () => {
     });
     expect(parseUiCommand('/source')).toEqual({ kind: 'source' });
     expect(parseUiCommand('/license')).toEqual({ kind: 'license' });
-    expect(parseUiCommand('/reply')).toEqual({ kind: 'reply' });
+    expect(parseUiCommand('/update')).toEqual({ kind: 'update' });
+    expect(parseUiCommand('/reply')).toEqual({ kind: 'help' });
   });
 
   it('treats regular text as a future chat message', () => {
