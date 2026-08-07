@@ -3,6 +3,11 @@ import { lpStream, type LengthPrefixedStream } from '@libp2p/utils';
 import { z } from 'zod';
 
 import type { JsonChannel } from './channel.js';
+import {
+  expectedImageChunkCount,
+  MAX_IMAGE_BYTES,
+  SUPPORTED_IMAGE_MIME_TYPES,
+} from '../image/image.js';
 
 const MAX_FRAME_BYTES = 64 * 1024;
 const base64Url = z.string().regex(/^[A-Za-z0-9_-]+$/u);
@@ -48,6 +53,7 @@ export const chatMessageSchema = z.object({
   sequenceNumber: z.number().int().nonnegative(),
   sentAt: z.iso.datetime(),
   body: z.string().min(1).max(16_384),
+  replyToMessageId: z.uuid().optional(),
 });
 
 export const acknowledgementSchema = z.object({
@@ -57,8 +63,41 @@ export const acknowledgementSchema = z.object({
   receivedAt: z.iso.datetime(),
 });
 
+export const imageMessageSchema = z
+  .object({
+    type: z.literal('image'),
+    version: z.literal(1),
+    messageId: z.uuid(),
+    sequenceNumber: z.number().int().nonnegative(),
+    sentAt: z.iso.datetime(),
+    body: z.string().max(16_384),
+    replyToMessageId: z.uuid().optional(),
+    attachmentId: z.uuid(),
+    filename: z.string().min(1).max(160),
+    mimeType: z.enum(SUPPORTED_IMAGE_MIME_TYPES),
+    byteLength: z.number().int().positive().max(MAX_IMAGE_BYTES),
+    sha256: base64Url.length(43),
+    chunkCount: z.number().int().positive().max(512),
+  })
+  .refine(
+    (message) =>
+      message.chunkCount === expectedImageChunkCount(message.byteLength),
+    { message: 'Image chunk count does not match its byte length' },
+  );
+
+export const imageChunkSchema = z.object({
+  type: z.literal('image-chunk'),
+  version: z.literal(1),
+  messageId: z.uuid(),
+  attachmentId: z.uuid(),
+  index: z.number().int().nonnegative().max(511),
+  data: base64Url.min(1).max(17_000),
+});
+
 export const chatFrameSchema = z.discriminatedUnion('type', [
   chatMessageSchema,
+  imageMessageSchema,
+  imageChunkSchema,
   acknowledgementSchema,
 ]);
 
@@ -67,6 +106,8 @@ export type AcceptMessage = z.infer<typeof acceptMessageSchema>;
 export type ErrorMessage = z.infer<typeof errorMessageSchema>;
 export type ChatMessage = z.infer<typeof chatMessageSchema>;
 export type Acknowledgement = z.infer<typeof acknowledgementSchema>;
+export type ImageMessage = z.infer<typeof imageMessageSchema>;
+export type ImageChunk = z.infer<typeof imageChunkSchema>;
 export type ChatFrame = z.infer<typeof chatFrameSchema>;
 
 export class FrameChannel implements JsonChannel {

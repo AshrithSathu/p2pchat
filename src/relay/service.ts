@@ -109,6 +109,7 @@ export class RelayService {
         remoteNetworkPeerId: 'cloudflare-relay',
         direction: 'joiner',
         transport: 'relay',
+        remoteFeatures: signalSession.remoteFeatures,
       };
     } catch (error: unknown) {
       const failure =
@@ -161,6 +162,7 @@ export class RelayService {
         remoteNetworkPeerId: 'cloudflare-relay',
         direction: 'creator',
         transport: 'relay',
+        remoteFeatures: signalSession.remoteFeatures,
       };
     } catch (error: unknown) {
       const failure =

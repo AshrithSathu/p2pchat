@@ -2,40 +2,120 @@ name: Release
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches: [main]
+  workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  package:
+  release:
+    name: Prepare release
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+    steps:
+      - id: release
+        uses: googleapis/release-please-action@v5
+        with:
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  publish:
+    name: Publish packages
+    needs: release
+    if: ${{ needs.release.outputs.release_created == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      id-token: write
+      packages: write
+    env:
+      RELEASE_TAG: ${{ needs.release.outputs.tag_name }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.RELEASE_TAG }}
       - uses: pnpm/action-setup@v6
         with:
           version: 11.4.0
       - uses: actions/setup-node@v7
         with:
           node-version: 24
-          cache: pnpm
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
       - run: pnpm install --frozen-lockfile
-      - name: Verify tag and package version
-        run: test "v$(node -p "require('./package.json').version")" = "$GITHUB_REF_NAME"
       - run: pnpm check
       - run: pnpm build
-      - name: Build installable package
+      - name: Verify release versions
+        run: |
+          test "v$(node -p "require('./package.json').version")" = "$RELEASE_TAG"
+          test "v$(node -e "import('./dist/core/version.js').then(({ APP_VERSION }) => process.stdout.write(APP_VERSION))")" = "$RELEASE_TAG"
+      - name: Build release artifacts
         run: |
           mkdir -p release
           pnpm pack --pack-destination release
           cd release
           sha256sum *.tgz > SHA256SUMS.txt
-      - name: Publish GitHub release
+      - name: Upload GitHub release artifacts
         env:
           GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$RELEASE_TAG" release/* --clobber
+      - name: Publish to npm
         run: >-
-          gh release create "$GITHUB_REF_NAME" release/*
-          --verify-tag
-          --title "p2pchat $GITHUB_REF_NAME"
-          --notes-file ".github/releases/$GITHUB_REF_NAME.md"
+          npm publish release/*.tgz
+          --registry=https://registry.npmjs.org
+          --access public
+      - name: Configure GitHub Packages
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: https://npm.pkg.github.com
+          scope: '@ashrithsathu'
+          package-manager-cache: false
+      - name: Publish to GitHub Packages
+        run: npm publish release/*.tgz --registry=https://npm.pkg.github.com
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  sync-develop:
+    name: Open main-to-develop sync
+    needs: release
+    if: ${{ needs.release.outputs.release_created == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
+      RELEASE_TAG: ${{ needs.release.outputs.tag_name }}
+    steps:
+      - name: Open sync pull request when needed
+        run: |
+          ahead_by=$(gh api "repos/$GITHUB_REPOSITORY/compare/develop...main" --jq .ahead_by)
+          if [ "$ahead_by" -eq 0 ]; then
+            exit 0
+          fi
+          existing=$(gh pr list --repo "$GITHUB_REPOSITORY" --base develop --head main --state open --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            exit 0
+          fi
+          gh pr create \
+            --repo "$GITHUB_REPOSITORY" \
+            --base develop \
+            --head main \
+            --title "chore: sync $RELEASE_TAG back to develop" \
+            --body "Synchronizes the automated release version, changelog, and manifest back into the integration branch."

@@ -55,6 +55,8 @@ describe('Signal channel', () => {
 
       expect(creator.localIdentityKey).toEqual(joiner.remoteIdentityKey);
       expect(creator.remoteIdentityKey).toEqual(joiner.localIdentityKey);
+      expect(creator.remoteFeatures).toContain('image-v1');
+      expect(joiner.remoteFeatures).toContain('image-v1');
 
       const heldFrames: unknown[] = [];
       creatorRaw.outboundHook = (value) => heldFrames.push(value);

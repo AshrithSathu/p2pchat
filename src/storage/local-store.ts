@@ -14,6 +14,12 @@ import Database from 'better-sqlite3';
 
 import { DEFAULT_PROFILE_NAME, normalizeProfileName } from '../core/profile.js';
 import {
+  MAX_IMAGE_BYTES,
+  SUPPORTED_IMAGE_MIME_TYPES,
+  type PreparedImage,
+  type SupportedImageMimeType,
+} from '../image/image.js';
+import {
   decryptRecord,
   deriveEncryptionKey,
   encryptRecord,
@@ -59,6 +65,7 @@ const SCHEMA = `
     sender_peer_id TEXT NOT NULL,
     sequence_number INTEGER NOT NULL,
     body_ciphertext BLOB NOT NULL,
+    reply_to_ciphertext BLOB,
     sent_at TEXT NOT NULL,
     received_at TEXT,
     delivery_state TEXT NOT NULL CHECK (
@@ -69,6 +76,17 @@ const SCHEMA = `
 
   CREATE INDEX IF NOT EXISTS messages_conversation_sent_at
     ON messages(conversation_id, sent_at);
+
+  CREATE TABLE IF NOT EXISTS message_attachments (
+    attachment_id TEXT PRIMARY KEY,
+    message_id TEXT NOT NULL UNIQUE REFERENCES messages(message_id),
+    kind TEXT NOT NULL CHECK (kind = 'image'),
+    metadata_ciphertext BLOB NOT NULL,
+    content_ciphertext BLOB NOT NULL,
+    byte_length INTEGER NOT NULL CHECK (
+      byte_length > 0 AND byte_length <= ${String(MAX_IMAGE_BYTES)}
+    )
+  );
 
   CREATE TABLE IF NOT EXISTS secure_state (
     namespace TEXT NOT NULL,
@@ -101,6 +119,10 @@ interface MessageIdRow {
   readonly message_id: string;
 }
 
+interface TableInfoRow {
+  readonly name: string;
+}
+
 interface SecureStateRow {
   readonly value_ciphertext: Buffer;
 }
@@ -111,9 +133,18 @@ interface MessageRow {
   readonly sender_peer_id: string;
   readonly sequence_number: number;
   readonly body_ciphertext: Buffer;
+  readonly reply_to_ciphertext: Buffer | null;
   readonly sent_at: string;
   readonly received_at: string | null;
   readonly delivery_state: MessageDeliveryState;
+  readonly attachment_id: string | null;
+  readonly attachment_metadata_ciphertext: Buffer | null;
+  readonly attachment_byte_length: number | null;
+}
+
+interface AttachmentContentRow {
+  readonly content_ciphertext: Buffer;
+  readonly byte_length: number;
 }
 
 export interface LocalIdentity {
@@ -144,9 +175,18 @@ export interface StoredMessage {
   readonly senderPeerId: string;
   readonly sequenceNumber: number;
   readonly body: string;
+  readonly replyToMessageId: string | null;
   readonly sentAt: string;
   readonly receivedAt: string | null;
   readonly deliveryState: MessageDeliveryState;
+  readonly image: StoredImageAttachment | null;
+}
+
+export interface StoredImageAttachment {
+  readonly id: string;
+  readonly filename: string;
+  readonly mimeType: SupportedImageMimeType;
+  readonly byteLength: number;
 }
 
 export interface OutgoingMessageInput {
@@ -155,6 +195,7 @@ export interface OutgoingMessageInput {
   readonly sequenceNumber: number;
   readonly body: string;
   readonly sentAt: string;
+  readonly replyToMessageId?: string | null;
 }
 
 export interface IncomingMessageInput extends OutgoingMessageInput {
@@ -162,10 +203,27 @@ export interface IncomingMessageInput extends OutgoingMessageInput {
   readonly receivedAt: string;
 }
 
+export interface OutgoingImageMessageInput extends OutgoingMessageInput {
+  readonly image: PreparedImage & { readonly id: string };
+}
+
+export interface IncomingImageMessageInput extends IncomingMessageInput {
+  readonly image: PreparedImage & { readonly id: string };
+}
+
 export class InvalidPassphraseError extends Error {
   public constructor() {
     super('The local passphrase is incorrect.');
     this.name = 'InvalidPassphraseError';
+  }
+}
+
+function migrateSchema(database: Database.Database): void {
+  const messageColumns = database
+    .prepare<[], TableInfoRow>('PRAGMA table_info(messages)')
+    .all();
+  if (!messageColumns.some((column) => column.name === 'reply_to_ciphertext')) {
+    database.exec('ALTER TABLE messages ADD COLUMN reply_to_ciphertext BLOB');
   }
 }
 
@@ -241,6 +299,7 @@ export class LocalStore {
     database.pragma('synchronous = FULL');
     database.pragma('secure_delete = ON');
     database.exec(SCHEMA);
+    migrateSchema(database);
     await chmod(databasePath, 0o600);
 
     const selectMetadata = database.prepare<[string], MetadataRow>(
@@ -514,17 +573,21 @@ export class LocalStore {
 
   public saveOutgoingMessage(input: OutgoingMessageInput): void {
     this.#assertOpen();
+    this.#assertReplyTarget(input.conversationId, input.replyToMessageId);
     const ciphertext = this.encrypt(
       Buffer.from(input.body, 'utf8'),
       messageContext(input.messageId),
     );
+    const replyToCiphertext = encryptReplyReference(this, input);
     this.#database.transaction(() => {
       this.#database
-        .prepare<[string, string, string, number, Buffer, string]>(
+        .prepare<
+          [string, string, string, number, Buffer, Buffer | null, string]
+        >(
           `INSERT INTO messages
             (message_id, conversation_id, sender_peer_id, sequence_number,
-             body_ciphertext, sent_at, delivery_state)
-           VALUES (?, ?, ?, ?, ?, ?, 'pending')`,
+             body_ciphertext, reply_to_ciphertext, sent_at, delivery_state)
+           VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')`,
         )
         .run(
           input.messageId,
@@ -532,6 +595,7 @@ export class LocalStore {
           this.#identity.id,
           input.sequenceNumber,
           ciphertext,
+          replyToCiphertext,
           input.sentAt,
         );
       this.#touchConversation(input.conversationId, input.sentAt);
@@ -540,17 +604,31 @@ export class LocalStore {
 
   public saveIncomingMessage(input: IncomingMessageInput): boolean {
     this.#assertOpen();
+    this.#assertReplyTarget(input.conversationId, input.replyToMessageId);
     const ciphertext = this.encrypt(
       Buffer.from(input.body, 'utf8'),
       messageContext(input.messageId),
     );
+    const replyToCiphertext = encryptReplyReference(this, input);
     return this.#database.transaction(() => {
       const result = this.#database
-        .prepare<[string, string, string, number, Buffer, string, string]>(
+        .prepare<
+          [
+            string,
+            string,
+            string,
+            number,
+            Buffer,
+            Buffer | null,
+            string,
+            string,
+          ]
+        >(
           `INSERT OR IGNORE INTO messages
             (message_id, conversation_id, sender_peer_id, sequence_number,
-             body_ciphertext, sent_at, received_at, delivery_state)
-           VALUES (?, ?, ?, ?, ?, ?, ?, 'received')`,
+             body_ciphertext, reply_to_ciphertext, sent_at, received_at,
+             delivery_state)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'received')`,
         )
         .run(
           input.messageId,
@@ -558,10 +636,105 @@ export class LocalStore {
           input.senderPeerId,
           input.sequenceNumber,
           ciphertext,
+          replyToCiphertext,
           input.sentAt,
           input.receivedAt,
         );
       if (result.changes === 1) {
+        this.#touchConversation(input.conversationId, input.receivedAt);
+        return true;
+      }
+
+      const existing = this.#database
+        .prepare<[string, string, number], MessageIdRow>(
+          `SELECT message_id FROM messages
+           WHERE conversation_id = ? AND sender_peer_id = ?
+             AND sequence_number = ?`,
+        )
+        .get(input.conversationId, input.senderPeerId, input.sequenceNumber);
+      if (existing?.message_id !== input.messageId) {
+        throw new Error('Peer reused a message sequence number');
+      }
+      return false;
+    })();
+  }
+
+  public saveOutgoingImageMessage(input: OutgoingImageMessageInput): void {
+    this.#assertOpen();
+    this.#assertReplyTarget(input.conversationId, input.replyToMessageId);
+    const bodyCiphertext = this.encrypt(
+      Buffer.from(input.body, 'utf8'),
+      messageContext(input.messageId),
+    );
+    const replyToCiphertext = encryptReplyReference(this, input);
+    const attachment = encryptImageAttachment(this, input.image);
+
+    this.#database.transaction(() => {
+      this.#database
+        .prepare<
+          [string, string, string, number, Buffer, Buffer | null, string]
+        >(
+          `INSERT INTO messages
+            (message_id, conversation_id, sender_peer_id, sequence_number,
+             body_ciphertext, reply_to_ciphertext, sent_at, delivery_state)
+           VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')`,
+        )
+        .run(
+          input.messageId,
+          input.conversationId,
+          this.#identity.id,
+          input.sequenceNumber,
+          bodyCiphertext,
+          replyToCiphertext,
+          input.sentAt,
+        );
+      this.#insertImageAttachment(input.messageId, input.image, attachment);
+      this.#touchConversation(input.conversationId, input.sentAt);
+    })();
+  }
+
+  public saveIncomingImageMessage(input: IncomingImageMessageInput): boolean {
+    this.#assertOpen();
+    this.#assertReplyTarget(input.conversationId, input.replyToMessageId);
+    const bodyCiphertext = this.encrypt(
+      Buffer.from(input.body, 'utf8'),
+      messageContext(input.messageId),
+    );
+    const replyToCiphertext = encryptReplyReference(this, input);
+    const attachment = encryptImageAttachment(this, input.image);
+
+    return this.#database.transaction(() => {
+      const result = this.#database
+        .prepare<
+          [
+            string,
+            string,
+            string,
+            number,
+            Buffer,
+            Buffer | null,
+            string,
+            string,
+          ]
+        >(
+          `INSERT OR IGNORE INTO messages
+            (message_id, conversation_id, sender_peer_id, sequence_number,
+             body_ciphertext, reply_to_ciphertext, sent_at, received_at,
+             delivery_state)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'received')`,
+        )
+        .run(
+          input.messageId,
+          input.conversationId,
+          input.senderPeerId,
+          input.sequenceNumber,
+          bodyCiphertext,
+          replyToCiphertext,
+          input.sentAt,
+          input.receivedAt,
+        );
+      if (result.changes === 1) {
+        this.#insertImageAttachment(input.messageId, input.image, attachment);
         this.#touchConversation(input.conversationId, input.receivedAt);
         return true;
       }
@@ -604,6 +777,31 @@ export class LocalStore {
     return result.changes === 1;
   }
 
+  public getMessage(
+    conversationId: string,
+    messageId: string,
+  ): StoredMessage | null {
+    this.#assertOpen();
+    const row = this.#database
+      .prepare<[string, string], MessageRow>(
+        `SELECT messages.message_id, messages.conversation_id,
+                messages.sender_peer_id, messages.sequence_number,
+                messages.body_ciphertext, messages.reply_to_ciphertext,
+                messages.sent_at, messages.received_at,
+                messages.delivery_state,
+                message_attachments.attachment_id,
+                message_attachments.metadata_ciphertext
+                  AS attachment_metadata_ciphertext,
+                message_attachments.byte_length AS attachment_byte_length
+         FROM messages
+         LEFT JOIN message_attachments
+           ON message_attachments.message_id = messages.message_id
+         WHERE messages.conversation_id = ? AND messages.message_id = ?`,
+      )
+      .get(conversationId, messageId);
+    return row === undefined ? null : this.#decodeStoredMessage(row);
+  }
+
   public listMessages(
     conversationId: string,
     limit = 100,
@@ -616,32 +814,54 @@ export class LocalStore {
     const rows = this.#database
       .prepare<[string, number], MessageRow>(
         `SELECT message_id, conversation_id, sender_peer_id, sequence_number,
-                body_ciphertext, sent_at, received_at, delivery_state
+                body_ciphertext, reply_to_ciphertext, sent_at, received_at,
+                delivery_state, attachment_id,
+                attachment_metadata_ciphertext, attachment_byte_length
          FROM (
-           SELECT message_id, conversation_id, sender_peer_id, sequence_number,
-                  body_ciphertext, sent_at, received_at, delivery_state
+           SELECT messages.message_id, messages.conversation_id,
+                  messages.sender_peer_id, messages.sequence_number,
+                  messages.body_ciphertext, messages.reply_to_ciphertext,
+                  messages.sent_at, messages.received_at,
+                  messages.delivery_state,
+                  message_attachments.attachment_id,
+                  message_attachments.metadata_ciphertext
+                    AS attachment_metadata_ciphertext,
+                  message_attachments.byte_length AS attachment_byte_length
            FROM messages
-           WHERE conversation_id = ?
-           ORDER BY sent_at DESC, message_id DESC
+           LEFT JOIN message_attachments
+             ON message_attachments.message_id = messages.message_id
+           WHERE messages.conversation_id = ?
+           ORDER BY messages.sent_at DESC, messages.message_id DESC
            LIMIT ?
          )
          ORDER BY sent_at ASC, message_id ASC`,
       )
       .all(conversationId, limit);
 
-    return rows.map((row) => ({
-      id: row.message_id,
-      conversationId: row.conversation_id,
-      senderPeerId: row.sender_peer_id,
-      sequenceNumber: row.sequence_number,
-      body: this.decrypt(
-        row.body_ciphertext,
-        messageContext(row.message_id),
-      ).toString('utf8'),
-      sentAt: row.sent_at,
-      receivedAt: row.received_at,
-      deliveryState: row.delivery_state,
-    }));
+    return rows.map((row) => this.#decodeStoredMessage(row));
+  }
+
+  public readImageAttachment(attachmentId: string): Buffer {
+    this.#assertOpen();
+    const row = this.#database
+      .prepare<[string], AttachmentContentRow>(
+        `SELECT content_ciphertext, byte_length
+         FROM message_attachments WHERE attachment_id = ?`,
+      )
+      .get(attachmentId);
+    if (row === undefined) {
+      throw new Error('Image attachment was not found');
+    }
+
+    const bytes = this.decrypt(
+      row.content_ciphertext,
+      attachmentContentContext(attachmentId),
+    );
+    if (bytes.byteLength !== row.byte_length) {
+      bytes.fill(0);
+      throw new Error('Encrypted image attachment has an invalid length');
+    }
+    return bytes;
   }
 
   public close(): void {
@@ -660,6 +880,42 @@ export class LocalStore {
     }
   }
 
+  #assertReplyTarget(
+    conversationId: string,
+    replyToMessageId: string | null | undefined,
+  ): void {
+    if (replyToMessageId === null || replyToMessageId === undefined) {
+      return;
+    }
+    const target = this.#database
+      .prepare<[string, string], MessageIdRow>(
+        `SELECT message_id FROM messages
+         WHERE conversation_id = ? AND message_id = ?`,
+      )
+      .get(conversationId, replyToMessageId);
+    if (target === undefined) {
+      throw new Error('Reply target is not part of this conversation');
+    }
+  }
+
+  #decodeStoredMessage(row: MessageRow): StoredMessage {
+    return {
+      id: row.message_id,
+      conversationId: row.conversation_id,
+      senderPeerId: row.sender_peer_id,
+      sequenceNumber: row.sequence_number,
+      body: this.decrypt(
+        row.body_ciphertext,
+        messageContext(row.message_id),
+      ).toString('utf8'),
+      replyToMessageId: decodeReplyReference(this, row),
+      sentAt: row.sent_at,
+      receivedAt: row.received_at,
+      deliveryState: row.delivery_state,
+      image: decodeStoredImageAttachment(this, row),
+    };
+  }
+
   #touchConversation(conversationId: string, updatedAt: string): void {
     this.#database
       .prepare<[string, string]>(
@@ -667,10 +923,167 @@ export class LocalStore {
       )
       .run(updatedAt, conversationId);
   }
+
+  #insertImageAttachment(
+    messageId: string,
+    image: PreparedImage & { readonly id: string },
+    attachment: EncryptedImageAttachment,
+  ): void {
+    this.#database
+      .prepare<[string, string, Buffer, Buffer, number]>(
+        `INSERT INTO message_attachments
+          (attachment_id, message_id, kind, metadata_ciphertext,
+           content_ciphertext, byte_length)
+         VALUES (?, ?, 'image', ?, ?, ?)`,
+      )
+      .run(
+        image.id,
+        messageId,
+        attachment.metadata,
+        attachment.content,
+        image.bytes.byteLength,
+      );
+  }
 }
 
 function messageContext(messageId: string): string {
   return `message:${messageId}:body:v1`;
+}
+
+function replyReferenceContext(messageId: string): string {
+  return `message:${messageId}:reply:v1`;
+}
+
+function encryptReplyReference(
+  store: LocalStore,
+  input: OutgoingMessageInput,
+): Buffer | null {
+  if (input.replyToMessageId === null || input.replyToMessageId === undefined) {
+    return null;
+  }
+  return store.encrypt(
+    Buffer.from(input.replyToMessageId, 'utf8'),
+    replyReferenceContext(input.messageId),
+  );
+}
+
+function decodeReplyReference(
+  store: LocalStore,
+  row: MessageRow,
+): string | null {
+  if (row.reply_to_ciphertext === null) {
+    return null;
+  }
+  const plaintext = store.decrypt(
+    row.reply_to_ciphertext,
+    replyReferenceContext(row.message_id),
+  );
+  try {
+    const messageId = plaintext.toString('utf8');
+    if (!isUuid(messageId)) {
+      throw new Error('Encrypted reply reference is invalid');
+    }
+    return messageId;
+  } finally {
+    plaintext.fill(0);
+  }
+}
+
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(
+    value,
+  );
+}
+
+interface ImageAttachmentMetadata {
+  readonly version: 1;
+  readonly filename: string;
+  readonly mimeType: SupportedImageMimeType;
+  readonly sha256: string;
+}
+
+interface EncryptedImageAttachment {
+  readonly metadata: Buffer;
+  readonly content: Buffer;
+}
+
+function encryptImageAttachment(
+  store: LocalStore,
+  image: PreparedImage & { readonly id: string },
+): EncryptedImageAttachment {
+  const metadata: ImageAttachmentMetadata = {
+    version: 1,
+    filename: image.filename,
+    mimeType: image.mimeType,
+    sha256: image.sha256,
+  };
+  return {
+    metadata: store.encrypt(
+      Buffer.from(JSON.stringify(metadata), 'utf8'),
+      attachmentMetadataContext(image.id),
+    ),
+    content: store.encrypt(image.bytes, attachmentContentContext(image.id)),
+  };
+}
+
+function decodeStoredImageAttachment(
+  store: LocalStore,
+  row: MessageRow,
+): StoredImageAttachment | null {
+  if (
+    row.attachment_id === null ||
+    row.attachment_metadata_ciphertext === null ||
+    row.attachment_byte_length === null
+  ) {
+    return null;
+  }
+  const plaintext = store.decrypt(
+    row.attachment_metadata_ciphertext,
+    attachmentMetadataContext(row.attachment_id),
+  );
+  try {
+    const value = JSON.parse(plaintext.toString('utf8')) as unknown;
+    if (!isImageAttachmentMetadata(value)) {
+      throw new Error('Encrypted image metadata is invalid');
+    }
+    return {
+      id: row.attachment_id,
+      filename: value.filename,
+      mimeType: value.mimeType,
+      byteLength: row.attachment_byte_length,
+    };
+  } finally {
+    plaintext.fill(0);
+  }
+}
+
+function isImageAttachmentMetadata(
+  value: unknown,
+): value is ImageAttachmentMetadata {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  return (
+    record['version'] === 1 &&
+    typeof record['filename'] === 'string' &&
+    record['filename'].length > 0 &&
+    record['filename'].length <= 160 &&
+    typeof record['mimeType'] === 'string' &&
+    SUPPORTED_IMAGE_MIME_TYPES.some(
+      (mimeType) => mimeType === record['mimeType'],
+    ) &&
+    typeof record['sha256'] === 'string' &&
+    /^[A-Za-z0-9_-]{43}$/u.test(record['sha256'])
+  );
+}
+
+function attachmentMetadataContext(attachmentId: string): string {
+  return `attachment:${attachmentId}:metadata:v1`;
+}
+
+function attachmentContentContext(attachmentId: string): string {
+  return `attachment:${attachmentId}:content:v1`;
 }
 
 function secureStateContext(namespace: string, recordKey: string): string {

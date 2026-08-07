@@ -3,8 +3,10 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { prepareImage } from '../image/image.js';
 import type { KdfOptions } from './crypto.js';
 import { InvalidPassphraseError, LocalStore } from './local-store.js';
 
@@ -153,6 +155,92 @@ describe('LocalStore', () => {
     reopened.close();
   });
 
+  it('encrypts reply relationships and keeps them conversation-scoped', async () => {
+    const directory = await temporaryDirectory();
+    const firstPeerDirectory = await temporaryDirectory();
+    const secondPeerDirectory = await temporaryDirectory();
+    const passphrase = 'reply encryption test passphrase';
+    const store = await LocalStore.open({
+      directory,
+      passphrase,
+      kdfOptions: testKdfOptions,
+    });
+    const firstPeer = await LocalStore.open({
+      directory: firstPeerDirectory,
+      passphrase: 'first reply peer passphrase',
+      kdfOptions: testKdfOptions,
+    });
+    const secondPeer = await LocalStore.open({
+      directory: secondPeerDirectory,
+      passphrase: 'second reply peer passphrase',
+      kdfOptions: testKdfOptions,
+    });
+    const conversationId = store.ensureConversation(firstPeer.identity);
+    const otherConversationId = store.ensureConversation(secondPeer.identity);
+    const targetMessageId = randomUUID();
+    const replyMessageId = randomUUID();
+
+    store.saveOutgoingMessage({
+      conversationId,
+      messageId: targetMessageId,
+      sequenceNumber: store.nextSequenceNumber(conversationId),
+      body: 'original encrypted message',
+      sentAt: new Date().toISOString(),
+    });
+    store.saveOutgoingMessage({
+      conversationId,
+      messageId: replyMessageId,
+      sequenceNumber: store.nextSequenceNumber(conversationId),
+      body: 'encrypted specific reply',
+      sentAt: new Date().toISOString(),
+      replyToMessageId: targetMessageId,
+    });
+    expect(
+      store.getMessage(conversationId, replyMessageId)?.replyToMessageId,
+    ).toBe(targetMessageId);
+    expect(() =>
+      store.saveOutgoingMessage({
+        conversationId: otherConversationId,
+        messageId: randomUUID(),
+        sequenceNumber: store.nextSequenceNumber(otherConversationId),
+        body: 'invalid cross-conversation reply',
+        sentAt: new Date().toISOString(),
+        replyToMessageId: targetMessageId,
+      }),
+    ).toThrow('Reply target is not part of this conversation');
+
+    store.close();
+    firstPeer.close();
+    secondPeer.close();
+
+    const rawDatabase = new Database(join(directory, 'chat.db'), {
+      readonly: true,
+    });
+    const row = rawDatabase
+      .prepare('SELECT reply_to_ciphertext FROM messages WHERE message_id = ?')
+      .get(replyMessageId) as
+      { readonly reply_to_ciphertext: Buffer } | undefined;
+    rawDatabase.close();
+    expect(row).toBeDefined();
+    expect(row?.reply_to_ciphertext).toBeInstanceOf(Buffer);
+    expect(row?.reply_to_ciphertext.equals(Buffer.from(targetMessageId))).toBe(
+      false,
+    );
+
+    const reopened = await LocalStore.open({
+      directory,
+      passphrase,
+      kdfOptions: testKdfOptions,
+    });
+    expect(reopened.getMessage(conversationId, replyMessageId)).toEqual(
+      expect.objectContaining({
+        body: 'encrypted specific reply',
+        replyToMessageId: targetMessageId,
+      }),
+    );
+    reopened.close();
+  });
+
   it('persists encrypted protocol state and supports secure deletion', async () => {
     const directory = await temporaryDirectory();
     const passphrase = 'protocol state encryption test passphrase';
@@ -184,6 +272,65 @@ describe('LocalStore', () => {
     );
     expect(reopened.deleteSecureState('signal-session', 'peer-1')).toBe(true);
     expect(reopened.readSecureState('signal-session', 'peer-1')).toBeNull();
+    reopened.close();
+  });
+
+  it('encrypts image filenames and content at rest', async () => {
+    const directory = await temporaryDirectory();
+    const peerDirectory = await temporaryDirectory();
+    const passphrase = 'image encryption test passphrase';
+    const store = await LocalStore.open({
+      directory,
+      passphrase,
+      kdfOptions: testKdfOptions,
+    });
+    const peerStore = await LocalStore.open({
+      directory: peerDirectory,
+      passphrase: 'image peer test passphrase',
+      kdfOptions: testKdfOptions,
+    });
+    const conversationId = store.ensureConversation(peerStore.identity);
+    const messageId = randomUUID();
+    const attachmentId = randomUUID();
+    const secretBytes = Buffer.from('unique-image-payload-secret-8491');
+    const png = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+      'base64',
+    );
+    const image = prepareImage(
+      Buffer.concat([png, secretBytes]),
+      'private-screenshot-8491.png',
+    );
+
+    store.saveOutgoingImageMessage({
+      conversationId,
+      messageId,
+      sequenceNumber: store.nextSequenceNumber(conversationId),
+      body: '',
+      sentAt: new Date().toISOString(),
+      image: { ...image, id: attachmentId },
+    });
+    store.close();
+    peerStore.close();
+
+    const databaseBytes = await readFile(join(directory, 'chat.db'));
+    expect(databaseBytes.includes(secretBytes)).toBe(false);
+    expect(
+      databaseBytes.includes(Buffer.from('private-screenshot-8491.png')),
+    ).toBe(false);
+
+    const reopened = await LocalStore.open({
+      directory,
+      passphrase,
+      kdfOptions: testKdfOptions,
+    });
+    const stored = reopened.listMessages(conversationId);
+    expect(stored).toHaveLength(1);
+    expect(stored[0]?.id).toBe(messageId);
+    expect(stored[0]?.image?.id).toBe(attachmentId);
+    expect(stored[0]?.image?.filename).toBe('private-screenshot-8491.png');
+    expect(stored[0]?.image?.mimeType).toBe('image/png');
+    expect(reopened.readImageAttachment(attachmentId)).toEqual(image.bytes);
     reopened.close();
   });
 });

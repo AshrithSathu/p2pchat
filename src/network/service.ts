@@ -34,6 +34,7 @@ import {
   type ErrorMessage,
 } from './protocol.js';
 import { establishSignalChannel } from '../signal/channel.js';
+import type { SignalFeature } from '../signal/channel.js';
 
 export const CHAT_PROTOCOL = '/p2pchat/1.0.0';
 const HANDSHAKE_TIMEOUT_MS = 15_000;
@@ -45,6 +46,7 @@ export interface AuthenticatedSession {
   readonly remoteNetworkPeerId: string;
   readonly direction: 'creator' | 'joiner';
   readonly transport: 'direct' | 'relay';
+  readonly remoteFeatures: readonly SignalFeature[];
 }
 
 export interface InviteHandle {
@@ -221,6 +223,7 @@ export class P2PService {
         remoteNetworkPeerId: invite.creatorNetworkPeerId,
         direction: 'joiner',
         transport: 'direct',
+        remoteFeatures: signalSession.remoteFeatures,
       };
     } catch (error: unknown) {
       const failure =
@@ -309,6 +312,7 @@ export class P2PService {
         remoteNetworkPeerId: join.networkPeerId,
         direction: 'creator',
         transport: 'direct',
+        remoteFeatures: signalSession.remoteFeatures,
       });
     } catch (error: unknown) {
       const failure =

@@ -20,12 +20,12 @@ chat messages, invite codes, passphrases, identities, or private keys.
 ## Current assurance level
 
 p2pchat has automated protocol, tamper, replay, persistence, direct-network,
-and deployed-relay tests. It has not received an independent cryptographic or
-application security audit. Treat v0.5.0 as a production-hardened release
-candidate, not an audited security product.
+encrypted image-transfer, and deployed-relay tests. It has not received an
+independent cryptographic or application security audit. Treat the latest
+release as production-hardened, not as an audited security product.
 
 Cloudflare can observe connection metadata, including IP addresses, timing,
 room locators, and ciphertext sizes. Local database metadata such as timestamps,
-delivery state, and peer identifiers is not encrypted. Device compromise,
-filesystem snapshots, backups, flash wear-leveling, or passphrase exposure can
-defeat local key-erasure expectations.
+delivery state, peer identifiers, and attachment byte length is not encrypted.
+Device compromise, filesystem snapshots, backups, flash wear-leveling, or
+passphrase exposure can defeat local key-erasure expectations.
