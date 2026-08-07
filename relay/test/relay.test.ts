@@ -17,11 +17,11 @@ describe('p2pchat relay', () => {
       'text/x-shellscript',
     );
     expect(installer.headers.get('X-Content-Type-Options')).toBe('nosniff');
-    expect(installer.headers.get('X-p2pchat-Version')).toBe('0.5.0');
+    expect(installer.headers.get('X-p2pchat-Version')).toBe('0.6.0');
     const script = await installer.text();
     expect(script).toMatch(/^#!\/bin\/sh\nset -eu/u);
     expect(script).toContain(
-      "package_name='@ashrithsathu/p2pchat'\npackage_version='0.5.0'",
+      "package_name='@ashrithsathu/p2pchat'\npackage_version='0.6.0'",
     );
     expect(script).toContain('npm install --global');
     expect(script).not.toMatch(/^\s*sudo\s/mu);

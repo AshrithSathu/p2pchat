@@ -14,8 +14,8 @@ export type UiAction =
   | Readonly<{ kind: 'new-local-chat' }>
   | Readonly<{ kind: 'license' }>
   | Readonly<{ kind: 'quit' }>
-  | Readonly<{ kind: 'reply' }>
-  | Readonly<{ kind: 'source' }>;
+  | Readonly<{ kind: 'source' }>
+  | Readonly<{ kind: 'update' }>;
 
 export const UI_COMMAND_SUGGESTIONS = [
   { name: 'new', description: 'Create an Internet chat' },
@@ -27,7 +27,7 @@ export const UI_COMMAND_SUGGESTIONS = [
   },
   { name: 'help', description: 'Show all commands' },
   { name: 'clear', description: 'Clear the activity panel' },
-  { name: 'reply', description: 'Reply to a specific message' },
+  { name: 'update', description: 'Install the latest p2pchat version' },
   { name: 'source', description: 'Show the exact release source' },
   { name: 'license', description: 'Show licensing information' },
   { name: 'quit', description: 'Exit safely' },
@@ -86,10 +86,10 @@ export function parseUiCommand(input: string): UiAction | null {
     case '/quit':
     case '/exit':
       return { kind: 'quit' };
-    case '/reply':
-      return { kind: 'reply' };
     case '/source':
       return { kind: 'source' };
+    case '/update':
+      return { kind: 'update' };
     default:
       return { kind: 'help' };
   }

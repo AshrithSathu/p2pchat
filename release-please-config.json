@@ -9,6 +9,10 @@
         {
           "type": "generic",
           "path": "src/core/version.ts"
+        },
+        {
+          "type": "generic",
+          "path": "relay/src/installer.ts"
         }
       ]
     }

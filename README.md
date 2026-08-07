@@ -81,10 +81,9 @@ acknowledged receipt.
 
 ## Reply to a message
 
-Press `Ctrl+R` or run `/reply` to open the recent-message picker. Use Up/Down
-to choose the exact message, Enter to select it, and Escape to cancel. The
-composer shows a compact quote; type a response or attach an image and press
-Enter to send.
+Press `Ctrl+R` to open the recent-message picker. Use Up/Down to choose the
+exact message, Enter to select it, and Escape to cancel. The composer shows a
+compact quote; type a response or attach an image and press Enter to send.
 
 The reply reference travels inside the Signal-encrypted message and is stored
 as a separate encrypted value in the local database. A reply can only target a
@@ -108,7 +107,7 @@ metadata fallback.
 | `/new`         | Create a short-lived Internet invitation       |
 | `/new-local`   | Create a direct invitation for reachable peers |
 | `/join <code>` | Join an Internet or direct invitation          |
-| `/reply`       | Reply to a specific recent message             |
+| `/update`      | Install the latest published p2pchat version   |
 | `/clear`       | Clear the activity panel                       |
 | `/help`        | Show command help                              |
 | `/source`      | Show source corresponding to this version      |
@@ -118,6 +117,12 @@ metadata fallback.
 Typing `/` opens Pi-style command autocomplete. Continue typing to fuzzy-filter,
 use Up/Down to select, Tab to insert without running, Enter to execute, and
 Escape to close the menu. `/exit` is an alias for `/quit`.
+
+At startup, p2pchat checks npm for a newer published version without delaying
+the interface. When one exists, a dismissible popup shows the installed and
+latest versions. Run `/update` to install `@ashrithsathu/p2pchat@latest` through
+npm, then restart p2pchat. Set `P2PCHAT_DISABLE_UPDATE_CHECK=1` to disable the
+automatic startup check; `/update` still works when invoked explicitly.
 
 ## Local profiles
 
@@ -187,6 +192,10 @@ public keys, and peer identifiers remain visible. Cloudflare can observe IP
 addresses, timing, room locators, and ciphertext sizes. A compromised unlocked
 device, administrator access, malware, backups, filesystem snapshots, or an
 exposed/weak profile password can defeat local protection.
+
+The optional startup update check contacts the public npm registry, which can
+observe the request IP address and package being checked. It never sends chat,
+profile, identity, or database data.
 
 This project is not affiliated with Signal. Signal documents external use of
 libsignal as unsupported, so the exact dependency version is intentionally

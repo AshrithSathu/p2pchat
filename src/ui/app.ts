@@ -35,6 +35,7 @@ import {
 } from '../storage/local-store.js';
 import { resolveProfileDataDirectory } from '../storage/paths.js';
 import { obtainPassphrase } from '../storage/unlock.js';
+import { checkForUpdate, installLatestPackage } from '../update/client.js';
 import { ansi } from './ansi.js';
 import {
   createUiAutocompleteProvider,
@@ -108,11 +109,47 @@ class ReplyPicker implements Component {
   }
 }
 
+class UpdateNotice implements Component {
+  public constructor(
+    readonly currentVersion: string,
+    readonly latestVersion: string,
+    readonly onClose: () => void,
+  ) {}
+
+  public render(width: number): string[] {
+    void width;
+    return [
+      ansi.bold(ansi.green('New version available')),
+      '',
+      `${ansi.dim(`v${this.currentVersion}`)}  →  ${ansi.cyan(
+        `v${this.latestVersion}`,
+      )}`,
+      '',
+      `Run ${ansi.cyan('/update')} to install it.`,
+      ansi.dim('Enter / Esc dismiss'),
+    ];
+  }
+
+  public handleInput(data: string): void {
+    if (
+      matchesKey(data, Key.enter) ||
+      matchesKey(data, Key.return) ||
+      matchesKey(data, Key.escape)
+    ) {
+      this.onClose();
+    }
+  }
+
+  public invalidate(): void {
+    // This notice has no cached layout state to invalidate.
+  }
+}
+
 const HELP_TEXT = `${ansi.bold('Commands')}
 ${ansi.cyan('/new')}          Create an Internet chat
 ${ansi.cyan('/new-local')}    Create a direct LAN chat
 ${ansi.cyan('/join <code>')}  Join using an invite code
-${ansi.cyan('/reply')}        Reply to a specific message
+${ansi.cyan('/update')}       Install the latest p2pchat version
 ${ansi.cyan('/clear')}        Clear this activity panel
 ${ansi.cyan('/source')}       Show the exact release source
 ${ansi.cyan('/license')}      Show licensing information
@@ -123,6 +160,7 @@ const LICENSE_URL = `https://github.com/AshrithSathu/p2pchat/blob/${APP_TAG}/LIC
 
 interface LayoutHandle {
   readonly root: Container;
+  showUpdateAvailable(latestVersion: string): void;
   close(): Promise<void>;
 }
 
@@ -157,6 +195,10 @@ function createLayout(
   let disconnectedReason: string | null = null;
   let replyToMessageId: string | null = null;
   let replyPickerOverlay: OverlayHandle | null = null;
+  let availableUpdateVersion: string | null = null;
+  let updateNoticeDismissed = false;
+  let updateNoticeOverlay: OverlayHandle | null = null;
+  let updateBusy = false;
   let pendingImage: PreparedImage | null = null;
   let bracketedPasteBuffer: string | null = null;
   let clipboardBusy = false;
@@ -389,14 +431,54 @@ function createLayout(
     tui.requestRender();
   };
 
-  const closeReplyPicker = (): void => {
-    replyPickerOverlay?.hide();
-    replyPickerOverlay = null;
+  const closeUpdateNotice = (): void => {
+    updateNoticeOverlay?.hide();
+    updateNoticeOverlay = null;
+    updateNoticeDismissed = true;
     tui.setFocus(editor);
     tui.requestRender();
   };
 
+  const showPendingUpdateNotice = (): void => {
+    if (
+      availableUpdateVersion === null ||
+      updateNoticeDismissed ||
+      updateNoticeOverlay !== null ||
+      replyPickerOverlay !== null
+    ) {
+      return;
+    }
+    updateNoticeOverlay = tui.showOverlay(
+      new UpdateNotice(APP_VERSION, availableUpdateVersion, closeUpdateNotice),
+      {
+        width: '55%',
+        minWidth: 42,
+        maxHeight: 10,
+        anchor: 'center',
+        margin: 2,
+      },
+    );
+    tui.requestRender();
+  };
+
+  const showUpdateAvailable = (latestVersion: string): void => {
+    availableUpdateVersion = latestVersion;
+    updateNoticeDismissed = false;
+    showPendingUpdateNotice();
+  };
+
+  const closeReplyPicker = (): void => {
+    replyPickerOverlay?.hide();
+    replyPickerOverlay = null;
+    tui.setFocus(editor);
+    showPendingUpdateNotice();
+    tui.requestRender();
+  };
+
   const openReplyPicker = (): void => {
+    if (updateNoticeOverlay !== null) {
+      closeUpdateNotice();
+    }
     if (currentChat === null) {
       setActivityText(
         `${ansi.yellow('No peer connected')}\nCreate or join a chat before replying.`,
@@ -567,14 +649,49 @@ function createLayout(
       case 'quit':
         finish();
         return;
-      case 'reply':
-        openReplyPicker();
-        return;
       case 'source':
         setActivityText(
           `${ansi.bold(`Corresponding source for p2pchat v${APP_VERSION}`)}\n${SOURCE_URL}`,
         );
         break;
+      case 'update': {
+        if (updateBusy) {
+          setActivityText(
+            `${ansi.yellow('Update already running')}\nWait for npm to finish.`,
+          );
+          break;
+        }
+        updateBusy = true;
+        closeUpdateNotice();
+        setActivityText(
+          `${ansi.yellow('Checking for updates…')}\nContacting the npm registry.`,
+        );
+        tui.requestRender();
+        try {
+          const status = await checkForUpdate(APP_VERSION);
+          if (!status.updateAvailable) {
+            availableUpdateVersion = null;
+            setActivityText(
+              `${ansi.green('● already up to date')}  p2pchat v${APP_VERSION}`,
+            );
+            break;
+          }
+          setActivityText(
+            `${ansi.yellow(`Installing p2pchat v${status.latestVersion}…`)}\n` +
+              ansi.dim('Your profile and encrypted database are not changed.'),
+          );
+          tui.requestRender();
+          await installLatestPackage();
+          availableUpdateVersion = null;
+          setActivityText(
+            `${ansi.green(`● p2pchat v${status.latestVersion} installed`)}\n\n` +
+              `Restart p2pchat to use the new version.`,
+          );
+        } finally {
+          updateBusy = false;
+        }
+        break;
+      }
     }
 
     tui.requestRender();
@@ -822,10 +939,12 @@ function createLayout(
   tui.setFocus(editor);
   return {
     root,
+    showUpdateAvailable,
     close: async () => {
       removeQuitInputListener();
       removeImageInputListener();
       replyPickerOverlay?.hide();
+      updateNoticeOverlay?.hide();
       pendingImage?.bytes.fill(0);
       pendingInvite?.cancel();
       await currentChat?.close();
@@ -853,6 +972,7 @@ export async function runTerminalApp(profileName = 'default'): Promise<void> {
     const terminal = new ProcessTerminal();
     const tui = new TUI(terminal);
     const completion = Promise.withResolvers<undefined>();
+    const updateCheckController = new AbortController();
     let finished = false;
     const finish = (): void => {
       if (finished) {
@@ -885,7 +1005,19 @@ export async function runTerminalApp(profileName = 'default'): Promise<void> {
 
     terminal.setTitle(`p2pchat — ${store.profileName}`);
     tui.start();
+    if (process.env['P2PCHAT_DISABLE_UPDATE_CHECK'] !== '1') {
+      void checkForUpdate(APP_VERSION, {
+        signal: updateCheckController.signal,
+      })
+        .then((status) => {
+          if (!finished && status.updateAvailable) {
+            layoutHandle.showUpdateAvailable(status.latestVersion);
+          }
+        })
+        .catch(() => undefined);
+    }
     await completion.promise;
+    updateCheckController.abort();
     await layoutHandle.close();
     await terminal.drainInput(250, 25);
   } finally {
