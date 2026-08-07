@@ -4,21 +4,19 @@ All notable changes to p2pchat are documented here.
 
 ## [0.6.0](https://github.com/AshrithSathu/p2pchat/compare/v0.5.0...v0.6.0) (2026-08-07)
 
-
 ### Features
 
-* add encrypted images and message replies ([#4](https://github.com/AshrithSathu/p2pchat/issues/4)) ([8bce453](https://github.com/AshrithSathu/p2pchat/commit/8bce45378b532a83484e50e74846ab9c2dea4233))
-* add hosted install script ([29ee0eb](https://github.com/AshrithSathu/p2pchat/commit/29ee0ebe3b6144569921052eece099a3b3366bab))
-* add landing site and repository safeguards ([19412c8](https://github.com/AshrithSathu/p2pchat/commit/19412c8614ab8cd001b830eab4d89fdab92c03d0))
-* redesign landing page ([76d2f5c](https://github.com/AshrithSathu/p2pchat/commit/76d2f5cedcaa4bff533692b4c786240bd126bf7f))
-
+- add encrypted images and message replies ([#4](https://github.com/AshrithSathu/p2pchat/issues/4)) ([8bce453](https://github.com/AshrithSathu/p2pchat/commit/8bce45378b532a83484e50e74846ab9c2dea4233))
+- add hosted install script ([29ee0eb](https://github.com/AshrithSathu/p2pchat/commit/29ee0ebe3b6144569921052eece099a3b3366bab))
+- add landing site and repository safeguards ([19412c8](https://github.com/AshrithSathu/p2pchat/commit/19412c8614ab8cd001b830eab4d89fdab92c03d0))
+- redesign landing page ([76d2f5c](https://github.com/AshrithSathu/p2pchat/commit/76d2f5cedcaa4bff533692b4c786240bd126bf7f))
 
 ### Bug Fixes
 
-* bound landing layout on large screens ([9366e4d](https://github.com/AshrithSathu/p2pchat/commit/9366e4dc0e2e24f73bf59e971646b6169aeaf0f1))
-* configure pnpm package registry ([0cc7cc4](https://github.com/AshrithSathu/p2pchat/commit/0cc7cc4944535dc7d755f7fa94b7442ad8fd7633))
-* override package publish target ([e4744b1](https://github.com/AshrithSathu/p2pchat/commit/e4744b14ebf5a3e6b20ee38c09b59252e3ee41bb))
-* target GitHub package registry ([c799ca3](https://github.com/AshrithSathu/p2pchat/commit/c799ca381fcdcfc59a0b1dab5822cb6fcc3ef374))
+- bound landing layout on large screens ([9366e4d](https://github.com/AshrithSathu/p2pchat/commit/9366e4dc0e2e24f73bf59e971646b6169aeaf0f1))
+- configure pnpm package registry ([0cc7cc4](https://github.com/AshrithSathu/p2pchat/commit/0cc7cc4944535dc7d755f7fa94b7442ad8fd7633))
+- override package publish target ([e4744b1](https://github.com/AshrithSathu/p2pchat/commit/e4744b14ebf5a3e6b20ee38c09b59252e3ee41bb))
+- target GitHub package registry ([c799ca3](https://github.com/AshrithSathu/p2pchat/commit/c799ca381fcdcfc59a0b1dab5822cb6fcc3ef374))
 
 ## 0.5.0 - 2026-08-05
 
