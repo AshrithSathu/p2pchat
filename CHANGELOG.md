@@ -2,6 +2,16 @@
 
 All notable changes to p2pchat are documented here.
 
+## [0.7.0](https://github.com/AshrithSathu/p2pchat/compare/v0.6.0...v0.7.0) (2026-08-07)
+
+### Features
+
+- add in-app update flow ([#9](https://github.com/AshrithSathu/p2pchat/issues/9)) ([c463402](https://github.com/AshrithSathu/p2pchat/commit/c463402b21da209501ddccbfa1be74b7a485493b))
+
+### Bug Fixes
+
+- publish packaged tarballs by file path ([#7](https://github.com/AshrithSathu/p2pchat/issues/7)) ([d53ccb7](https://github.com/AshrithSathu/p2pchat/commit/d53ccb71af09825aa98f9965fa704eea8b029d40))
+
 ## [0.6.0](https://github.com/AshrithSathu/p2pchat/compare/v0.5.0...v0.6.0) (2026-08-07)
 
 ### Features
