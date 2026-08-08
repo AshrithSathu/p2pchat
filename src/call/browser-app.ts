@@ -113,12 +113,12 @@ async function start(): Promise<void> {
     });
     const answer = await connection.createAnswer();
     await connection.setLocalDescription(answer);
-    await waitForIceGathering(connection);
+    await waitForRelayCandidate(connection);
     await sendLocalDescription(connection, 'answer');
   } else {
     const offer = await connection.createOffer();
     await connection.setLocalDescription(offer);
-    await waitForIceGathering(connection);
+    await waitForRelayCandidate(connection);
     await sendLocalDescription(connection, 'offer');
   }
 
@@ -189,29 +189,46 @@ async function sendLocalDescription(
   });
 }
 
-async function waitForIceGathering(
+async function waitForRelayCandidate(
   peerConnection: RTCPeerConnection,
 ): Promise<void> {
-  if (peerConnection.iceGatheringState === 'complete') {
+  if (hasRelayCandidate(peerConnection.localDescription?.sdp)) {
     return;
   }
   await new Promise<void>((resolve, reject) => {
     const timeout = window.setTimeout(() => {
       cleanup();
       reject(new Error('TURN relay candidate gathering timed out'));
-    }, 20_000);
-    const onChange = (): void => {
-      if (peerConnection.iceGatheringState === 'complete') {
+    }, 45_000);
+    const onCandidate = (event: RTCPeerConnectionIceEvent): void => {
+      if (event.candidate?.type === 'relay') {
         cleanup();
         resolve();
+        return;
+      }
+      if (event.candidate === null) {
+        cleanup();
+        reject(new Error('No TURN relay candidate was available'));
       }
     };
     const cleanup = (): void => {
       window.clearTimeout(timeout);
-      peerConnection.removeEventListener('icegatheringstatechange', onChange);
+      peerConnection.removeEventListener('icecandidate', onCandidate);
     };
-    peerConnection.addEventListener('icegatheringstatechange', onChange);
+    peerConnection.addEventListener('icecandidate', onCandidate);
   });
+}
+
+function hasRelayCandidate(sdp: string | undefined): boolean {
+  return (
+    sdp
+      ?.split(/\r?\n/gu)
+      .some(
+        (line) =>
+          line.startsWith('a=candidate:') &&
+          /(?:^|\s)typ\s+relay(?:\s|$)/u.test(line),
+      ) ?? false
+  );
 }
 
 async function verifyRelayRoute(
