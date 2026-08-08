@@ -4,15 +4,13 @@ All notable changes to p2pchat are documented here.
 
 ## [0.8.1](https://github.com/AshrithSathu/p2pchat/compare/v0.7.0...v0.8.1) (2026-08-08)
 
-
 ### Features
 
-* ship relay-only encrypted video calls ([#11](https://github.com/AshrithSathu/p2pchat/issues/11)) ([718f72f](https://github.com/AshrithSathu/p2pchat/commit/718f72f975312df5509a538c60108b33d32e1fde))
-
+- ship relay-only encrypted video calls ([#11](https://github.com/AshrithSathu/p2pchat/issues/11)) ([718f72f](https://github.com/AshrithSathu/p2pchat/commit/718f72f975312df5509a538c60108b33d32e1fde))
 
 ### Bug Fixes
 
-* publish immutable 0.8.1 release ([#13](https://github.com/AshrithSathu/p2pchat/issues/13)) ([5f3a0cb](https://github.com/AshrithSathu/p2pchat/commit/5f3a0cb94a3f7751b4e17489b9aebc8af0d9e238))
+- publish immutable 0.8.1 release ([#13](https://github.com/AshrithSathu/p2pchat/issues/13)) ([5f3a0cb](https://github.com/AshrithSathu/p2pchat/commit/5f3a0cb94a3f7751b4e17489b9aebc8af0d9e238))
 
 ## [0.7.0](https://github.com/AshrithSathu/p2pchat/compare/v0.6.0...v0.7.0) (2026-08-07)
 
