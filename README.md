@@ -96,10 +96,11 @@ Calls are deliberately one-to-one and fail closed:
 
 - SDP offers and answers travel inside the authenticated Signal Double Ratchet.
 - WebRTC encrypts audio and video end to end with DTLS-SRTP.
-- `iceTransportPolicy: "relay"` is mandatory. Both SDP candidates and the
-  selected WebRTC candidate pair are checked to be TURN relays.
+- `iceTransportPolicy: "relay"` is mandatory. Every SDP candidate must be a
+  TURN relay, and each participant verifies its selected local candidate is a
+  TURN relay before sending an encrypted route confirmation.
 - Camera/microphone transmission and remote playback remain disabled until the
-  selected TURN candidate pair has been independently verified.
+  two participants have exchanged those independent confirmations.
 - There is no direct WebRTC fallback. If TURN is unavailable, the call fails.
 - Participants do not receive one another's IP addresses. The selected TURN
   operator still observes each participant's IP address, timing, and encrypted

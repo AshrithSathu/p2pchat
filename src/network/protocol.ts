@@ -13,6 +13,7 @@ import {
   callDeclineSchema,
   callEndSchema,
   callOfferSchema,
+  callVerifiedSchema,
   type CallFrame,
 } from '../call/protocol.js';
 
@@ -110,6 +111,7 @@ export const chatFrameSchema = z.discriminatedUnion('type', [
   callAnswerSchema,
   callDeclineSchema,
   callEndSchema,
+  callVerifiedSchema,
 ]);
 
 export type JoinMessage = z.infer<typeof joinMessageSchema>;

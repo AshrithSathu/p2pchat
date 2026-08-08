@@ -52,6 +52,9 @@ type CallState =
       role: 'caller' | 'callee';
       bridge: LocalCallBridge;
       timeout: ReturnType<typeof setTimeout>;
+      localVerified: boolean;
+      remoteVerified: boolean;
+      active: boolean;
     }>;
 
 export class CallController {
@@ -158,7 +161,6 @@ export class CallController {
           return;
         }
         assertRelayOnlySdp(frame.sdp);
-        clearTimeout(this.#state.timeout);
         this.#state.bridge.send({
           kind: 'remote-description',
           description: { type: 'answer', sdp: frame.sdp },
@@ -168,6 +170,17 @@ export class CallController {
           state: 'connecting',
           message: 'Verifying the encrypted TURN route…',
         });
+        return;
+      case 'call-verified':
+        if (
+          this.#state.kind !== 'browser' ||
+          this.#state.callId !== frame.callId ||
+          this.#state.remoteVerified
+        ) {
+          return;
+        }
+        this.#state = { ...this.#state, remoteVerified: true };
+        this.#activateVerifiedCall(frame.callId);
         return;
       case 'call-decline':
         if (this.#callId() !== frame.callId) {
@@ -292,7 +305,16 @@ export class CallController {
         void this.#finishBrowserState('Video call timed out');
       }
     }, CALL_RESPONSE_TIMEOUT_MS);
-    this.#state = { kind: 'browser', callId, role, bridge, timeout };
+    this.#state = {
+      kind: 'browser',
+      callId,
+      role,
+      bridge,
+      timeout,
+      localVerified: false,
+      remoteVerified: false,
+      active: false,
+    };
     try {
       const localUrl = await bridge.open();
       this.#listener({
@@ -354,12 +376,21 @@ export class CallController {
         });
         return;
       case 'verified':
-        clearTimeout(this.#state.timeout);
+        if (this.#state.localVerified) {
+          return;
+        }
+        this.#state = { ...this.#state, localVerified: true };
         this.#listener({
           kind: 'status',
-          state: 'active',
-          message: 'TURN relay verified • DTLS-SRTP end-to-end encrypted',
+          state: 'connecting',
+          message: 'Local TURN relay verified; waiting for peer…',
         });
+        await this.#chat.sendCallSignal({
+          type: 'call-verified',
+          version: 1,
+          callId,
+        });
+        this.#activateVerifiedCall(callId);
         return;
       case 'hangup':
         await this.#finishBrowserState('Video call ended');
@@ -369,6 +400,27 @@ export class CallController {
         await this.#finishBrowserState(`Video call failed: ${command.reason}`);
         await this.#sendEnd(callId, 'failed');
     }
+  }
+
+  #activateVerifiedCall(callId: string): void {
+    if (
+      this.#state.kind !== 'browser' ||
+      this.#state.callId !== callId ||
+      this.#state.active ||
+      !this.#state.localVerified ||
+      !this.#state.remoteVerified
+    ) {
+      return;
+    }
+    const state = this.#state;
+    clearTimeout(state.timeout);
+    this.#state = { ...state, active: true };
+    state.bridge.send({ kind: 'verified' });
+    this.#listener({
+      kind: 'status',
+      state: 'active',
+      message: 'Both TURN relays verified • DTLS-SRTP end-to-end encrypted',
+    });
   }
 
   async #finishBrowserState(message: string): Promise<void> {

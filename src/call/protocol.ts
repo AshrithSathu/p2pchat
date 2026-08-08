@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const VIDEO_CALL_FEATURE = 'video-call-v1';
+export const VIDEO_CALL_FEATURE = 'video-call-v2';
 
 const callIdSchema = z.uuid();
 const sdpSchema = z.string().min(1).max(18_000);
@@ -34,17 +34,25 @@ export const callEndSchema = z.object({
   reason: z.enum(['ended', 'failed', 'cancelled']),
 });
 
+export const callVerifiedSchema = z.object({
+  type: z.literal('call-verified'),
+  version: z.literal(1),
+  callId: callIdSchema,
+});
+
 export const callFrameSchema = z.discriminatedUnion('type', [
   callOfferSchema,
   callAnswerSchema,
   callDeclineSchema,
   callEndSchema,
+  callVerifiedSchema,
 ]);
 
 export type CallOffer = z.infer<typeof callOfferSchema>;
 export type CallAnswer = z.infer<typeof callAnswerSchema>;
 export type CallDecline = z.infer<typeof callDeclineSchema>;
 export type CallEnd = z.infer<typeof callEndSchema>;
+export type CallVerified = z.infer<typeof callVerifiedSchema>;
 export type CallFrame = z.infer<typeof callFrameSchema>;
 
 const turnUrlSchema = z

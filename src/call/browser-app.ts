@@ -1,3 +1,5 @@
+import { assertSelectedRelayRoute } from './browser-route.js';
+
 interface TurnIceServer {
   readonly urls: readonly string[];
   readonly username: string;
@@ -22,6 +24,7 @@ interface BrowserEventEnvelope {
         kind: 'remote-description';
         description: Readonly<{ type: 'offer' | 'answer'; sdp: string }>;
       }>
+    | Readonly<{ kind: 'verified' }>
     | Readonly<{ kind: 'ended'; reason: string }>;
 }
 
@@ -42,6 +45,7 @@ let localStream: MediaStream | null = null;
 let pendingRemoteStream: MediaStream | null = null;
 let lastEventSequence = 0;
 let closed = false;
+let localRouteVerified = false;
 let routeVerified = false;
 let routeVerificationStarted = false;
 let wantsAudio = true;
@@ -159,6 +163,10 @@ async function pollEvents(): Promise<void> {
           closeMedia(envelope.event.reason);
           return;
         }
+        if (envelope.event.kind === 'verified') {
+          activateRelayMedia();
+          continue;
+        }
         assertRelayOnlySdp(envelope.event.description.sdp);
         if (envelope.event.description.type !== 'answer') {
           throw new Error('Unexpected remote WebRTC description');
@@ -234,7 +242,7 @@ function hasRelayCandidate(sdp: string | undefined): boolean {
 async function verifyRelayRoute(
   peerConnection: RTCPeerConnection,
 ): Promise<void> {
-  if (routeVerified || routeVerificationStarted) {
+  if (localRouteVerified || routeVerificationStarted) {
     return;
   }
   routeVerificationStarted = true;
@@ -248,22 +256,31 @@ async function verifyRelayRoute(
     }
     const local: unknown = reports.get(selectedPair.localCandidateId);
     const remote: unknown = reports.get(selectedPair.remoteCandidateId);
-    if (
-      !isRelayCandidate(local, 'local-candidate') ||
-      !isRelayCandidate(remote, 'remote-candidate')
-    ) {
-      throw new Error('Call attempted to use a non-relay network route');
-    }
-    routeVerified = true;
-    applyMediaPreferences();
-    remoteVideo.srcObject = pendingRemoteStream;
+    assertSelectedRelayRoute(local, remote);
+    localRouteVerified = true;
     await postCommand({ kind: 'verified' });
-    security.textContent = '● TURN relay verified · DTLS-SRTP E2EE';
-    remoteVideo.classList.add('visible');
-    setStatus('');
+    security.textContent = '● local TURN relay verified · awaiting peer';
+    setStatus('waiting for peer relay verification…');
     return;
   }
   throw new Error('Unable to verify the selected TURN route');
+}
+
+function activateRelayMedia(): void {
+  if (routeVerified) {
+    return;
+  }
+  if (!localRouteVerified) {
+    throw new Error(
+      'Peer relay confirmation arrived before local verification',
+    );
+  }
+  routeVerified = true;
+  applyMediaPreferences();
+  remoteVideo.srcObject = pendingRemoteStream;
+  security.textContent = '● both TURN relays verified · DTLS-SRTP E2EE';
+  remoteVideo.classList.add('visible');
+  setStatus('');
 }
 
 function applyMediaPreferences(): void {
@@ -301,17 +318,6 @@ function findSelectedCandidatePair(
     }
   }
   return null;
-}
-
-function isRelayCandidate(
-  value: unknown,
-  type: 'local-candidate' | 'remote-candidate',
-): boolean {
-  return (
-    isRecord(value) &&
-    value['type'] === type &&
-    value['candidateType'] === 'relay'
-  );
 }
 
 function assertRelayOnlySdp(sdp: string): void {
@@ -420,6 +426,12 @@ function parseEvents(value: unknown): readonly BrowserEventEnvelope[] {
       return {
         sequence: item['sequence'],
         event: { kind: 'ended', reason: event['reason'] },
+      };
+    }
+    if (event['kind'] === 'verified') {
+      return {
+        sequence: item['sequence'],
+        event: { kind: 'verified' },
       };
     }
     const description = event['description'];

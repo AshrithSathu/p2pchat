@@ -66,8 +66,8 @@ describe('P2PService', () => {
       expect(joinerSession.direction).toBe('joiner');
       expect(creatorSession.remoteFeatures).toContain('image-v1');
       expect(joinerSession.remoteFeatures).toContain('image-v1');
-      expect(creatorSession.remoteFeatures).not.toContain('video-call-v1');
-      expect(joinerSession.remoteFeatures).not.toContain('video-call-v1');
+      expect(creatorSession.remoteFeatures).not.toContain('video-call-v2');
+      expect(joinerSession.remoteFeatures).not.toContain('video-call-v2');
 
       const creatorChat = new ChatSession(creatorSession, creatorStore);
       const joinerChat = new ChatSession(joinerSession, joinerStore);

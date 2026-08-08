@@ -211,6 +211,7 @@ export class ChatSession {
           case 'call-answer':
           case 'call-decline':
           case 'call-end':
+          case 'call-verified':
             if (!this.supportsVideoCalls) {
               throw new Error(
                 'Peer sent call signaling without negotiating call support',

@@ -41,6 +41,9 @@ describe('local call bridge', () => {
         browserScriptPath: fileURLToPath(
           new URL('./browser-app.ts', import.meta.url),
         ),
+        browserRouteScriptPath: fileURLToPath(
+          new URL('./browser-route.ts', import.meta.url),
+        ),
       },
     );
     bridges.push(bridge);
@@ -70,6 +73,15 @@ describe('local call bridge', () => {
     expect(commandResponse.status).toBe(202);
     expect(commands).toEqual([{ kind: 'verified' }]);
 
+    const routeScriptResponse = await fetch(
+      new URL('/browser-route.js', callUrl),
+    );
+    expect(routeScriptResponse.status).toBe(200);
+    await expect(routeScriptResponse.text()).resolves.toContain(
+      'assertSelectedRelayRoute',
+    );
+
+    bridge.send({ kind: 'verified' });
     bridge.send({ kind: 'ended', reason: 'test complete' });
     const eventResponse = await fetch(new URL('/api/events?after=0', callUrl), {
       headers,
@@ -78,6 +90,10 @@ describe('local call bridge', () => {
       events: [
         {
           sequence: 1,
+          event: { kind: 'verified' },
+        },
+        {
+          sequence: 2,
           event: { kind: 'ended', reason: 'test complete' },
         },
       ],

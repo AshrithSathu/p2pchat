@@ -112,16 +112,117 @@ describe('video call controller', () => {
       body: JSON.stringify({ kind: 'verified' }),
     });
     expect(verifiedResponse.status).toBe(202);
+    expect(signals).toContainEqual({
+      type: 'call-verified',
+      version: 1,
+      callId: offer.callId,
+    });
+    expect(events).not.toContainEqual(
+      expect.objectContaining({ kind: 'status', state: 'active' }),
+    );
+
+    await controller.receive({
+      type: 'call-verified',
+      version: 1,
+      callId: offer.callId,
+    });
     expect(events).toContainEqual({
       kind: 'status',
       state: 'active',
-      message: 'TURN relay verified • DTLS-SRTP end-to-end encrypted',
+      message: 'Both TURN relays verified • DTLS-SRTP end-to-end encrypted',
+    });
+    const activationResponse = await fetch(
+      new URL('/api/events?after=1', callUrl),
+      { headers },
+    );
+    await expect(activationResponse.json()).resolves.toEqual({
+      events: [{ sequence: 2, event: { kind: 'verified' } }],
     });
     await controller.hangUp();
     expect(signals.at(-1)).toMatchObject({
       type: 'call-end',
       callId: offer.callId,
       reason: 'ended',
+    });
+  });
+
+  it('activates when the peer relay confirmation arrives first', async () => {
+    const signals: CallFrame[] = [];
+    const events: CallControllerEvent[] = [];
+    const controller = new CallController(
+      {
+        supportsVideoCalls: true,
+        sendCallSignal(frame) {
+          signals.push(frame);
+          return Promise.resolve();
+        },
+      },
+      { createTurnCredentials: () => Promise.resolve(turnCredentials) },
+      'PEER-4321',
+      (event) => events.push(event),
+      {
+        openUrl: () => undefined,
+        browserScriptPath: fileURLToPath(
+          new URL('./browser-app.ts', import.meta.url),
+        ),
+      },
+    );
+    controllers.push(controller);
+    await controller.start();
+
+    const opening = events.find(
+      (event) => event.kind === 'status' && event.localUrl !== undefined,
+    );
+    if (opening?.kind !== 'status' || opening.localUrl === undefined) {
+      throw new Error('Expected a local call URL');
+    }
+    const callUrl = new URL(opening.localUrl);
+    const token = callUrl.hash.slice(1);
+    callUrl.hash = '';
+    const headers = {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    };
+    const offerResponse = await fetch(new URL('/api/commands', callUrl), {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        kind: 'description',
+        description: { type: 'offer', sdp: relaySdp },
+      }),
+    });
+    expect(offerResponse.status).toBe(202);
+    const offer = signals.find((frame) => frame.type === 'call-offer');
+    if (offer?.type !== 'call-offer') {
+      throw new Error('Expected an encrypted call offer');
+    }
+
+    await controller.receive({
+      type: 'call-verified',
+      version: 1,
+      callId: offer.callId,
+    });
+    expect(events).not.toContainEqual(
+      expect.objectContaining({ kind: 'status', state: 'active' }),
+    );
+
+    const verifiedResponse = await fetch(new URL('/api/commands', callUrl), {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ kind: 'verified' }),
+    });
+    expect(verifiedResponse.status).toBe(202);
+    expect(events).toContainEqual({
+      kind: 'status',
+      state: 'active',
+      message: 'Both TURN relays verified • DTLS-SRTP end-to-end encrypted',
+    });
+    const activationResponse = await fetch(
+      new URL('/api/events?after=0', callUrl),
+      { headers },
+    );
+    await expect(activationResponse.json()).resolves.toEqual({
+      events: [{ sequence: 1, event: { kind: 'verified' } }],
     });
   });
 

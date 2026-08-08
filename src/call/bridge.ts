@@ -37,6 +37,7 @@ export type BrowserCallEvent =
       kind: 'remote-description';
       description: Readonly<{ type: 'offer' | 'answer'; sdp: string }>;
     }>
+  | Readonly<{ kind: 'verified' }>
   | Readonly<{ kind: 'ended'; reason: string }>;
 
 export interface LocalCallSession {
@@ -50,6 +51,7 @@ export interface LocalCallSession {
 export interface LocalCallBridgeOptions {
   readonly openUrl?: (url: string) => void;
   readonly browserScriptPath?: string;
+  readonly browserRouteScriptPath?: string;
 }
 
 interface SequencedBrowserEvent {
@@ -63,6 +65,7 @@ export class LocalCallBridge {
   readonly #onCommand: (command: BrowserCallCommand) => void | Promise<void>;
   readonly #openUrl: (url: string) => void;
   readonly #browserScriptPath: string;
+  readonly #browserRouteScriptPath: string | undefined;
   readonly #events: SequencedBrowserEvent[] = [];
   #nextSequence = 1;
   #server: ReturnType<typeof createServer> | null = null;
@@ -77,6 +80,7 @@ export class LocalCallBridge {
     this.#openUrl = options.openUrl ?? openBrowser;
     this.#browserScriptPath =
       options.browserScriptPath ?? resolveBrowserScriptPath();
+    this.#browserRouteScriptPath = options.browserRouteScriptPath;
   }
 
   public async open(): Promise<string> {
@@ -159,6 +163,16 @@ export class LocalCallBridge {
     }
     if (request.method === 'GET' && url.pathname === '/app.js') {
       const script = await readFile(this.#browserScriptPath);
+      response.writeHead(200, {
+        'Content-Type': 'text/javascript; charset=utf-8',
+      });
+      response.end(script);
+      return;
+    }
+    if (request.method === 'GET' && url.pathname === '/browser-route.js') {
+      const script = await readFile(
+        this.#browserRouteScriptPath ?? resolveBrowserRouteScriptPath(),
+      );
       response.writeHead(200, {
         'Content-Type': 'text/javascript; charset=utf-8',
       });
@@ -269,6 +283,24 @@ function resolveBrowserScriptPath(): string {
   }
   throw new Error(
     'Video call browser assets are missing. Run pnpm build:call and restart p2pchat.',
+  );
+}
+
+function resolveBrowserRouteScriptPath(): string {
+  const besideModule = fileURLToPath(
+    new URL('./browser-route.js', import.meta.url),
+  );
+  if (existsSync(besideModule)) {
+    return besideModule;
+  }
+  const developmentBuild = fileURLToPath(
+    new URL('../../dist/call/browser-route.js', import.meta.url),
+  );
+  if (existsSync(developmentBuild)) {
+    return developmentBuild;
+  }
+  throw new Error(
+    'Video call relay verification assets are missing. Run pnpm build:call and restart p2pchat.',
   );
 }
 
