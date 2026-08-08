@@ -2,6 +2,13 @@
 
 All notable changes to p2pchat are documented here.
 
+## [0.8.3](https://github.com/AshrithSathu/p2pchat/compare/v0.8.2...v0.8.3) (2026-08-08)
+
+
+### Bug Fixes
+
+* handle relay peer presence before calls ([#19](https://github.com/AshrithSathu/p2pchat/issues/19)) ([d910094](https://github.com/AshrithSathu/p2pchat/commit/d910094db249541b09ebec2d481265b77bdb53b8))
+
 ## [0.8.2](https://github.com/AshrithSathu/p2pchat/compare/v0.8.1...v0.8.2) (2026-08-08)
 
 ### Bug Fixes
