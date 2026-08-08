@@ -30,6 +30,15 @@ interface ActiveRelayContext {
   readonly locator: RelayLocator;
 }
 
+const TURN_PEER_RETRY_DELAYS_MS = [0, 200, 500, 1_000] as const;
+
+export class RelayPeerOfflineError extends Error {
+  public constructor(cause?: Error) {
+    super('Peer is no longer connected', { cause });
+    this.name = 'RelayPeerOfflineError';
+  }
+}
+
 export interface RelayServiceOptions {
   readonly endpoint: string;
 }
@@ -130,13 +139,17 @@ export class RelayService {
 
   public async createTurnCredentials(callId: string): Promise<TurnCredentials> {
     this.#assertRunning();
-    if (this.#activeContext === null) {
+    const context = this.#activeContext;
+    if (context === null) {
       throw new Error('Connect to a peer before starting a video call');
     }
-    return await this.#api.fetchTurnCredentials(
-      this.#activeContext.role,
-      this.#activeContext.locator,
-      callId,
+    return await requestTurnCredentialsWithPeerRetry(
+      async () =>
+        await this.#api.fetchTurnCredentials(
+          context.role,
+          context.locator,
+          callId,
+        ),
     );
   }
 
@@ -200,4 +213,32 @@ export class RelayService {
       throw new Error('Internet relay is stopped');
     }
   }
+}
+
+export async function requestTurnCredentialsWithPeerRetry(
+  request: () => Promise<TurnCredentials>,
+  retryDelaysMs: readonly number[] = TURN_PEER_RETRY_DELAYS_MS,
+): Promise<TurnCredentials> {
+  let peerOfflineCause: Error | undefined;
+  for (const retryDelayMs of retryDelaysMs) {
+    if (retryDelayMs > 0) {
+      await delay(retryDelayMs);
+    }
+    try {
+      return await request();
+    } catch (error: unknown) {
+      if (
+        !(error instanceof Error) ||
+        error.message !== 'Relay peer is not connected'
+      ) {
+        throw error;
+      }
+      peerOfflineCause = error;
+    }
+  }
+  throw new RelayPeerOfflineError(peerOfflineCause);
+}
+
+async function delay(milliseconds: number): Promise<void> {
+  await new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
 }
