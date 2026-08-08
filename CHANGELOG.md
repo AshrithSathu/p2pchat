@@ -2,6 +2,12 @@
 
 All notable changes to p2pchat are documented here.
 
+## [0.8.2](https://github.com/AshrithSathu/p2pchat/compare/v0.8.1...v0.8.2) (2026-08-08)
+
+### Bug Fixes
+
+- make TURN video calls reliable ([14f29dd](https://github.com/AshrithSathu/p2pchat/commit/14f29dd375d00ed6cde9130255b0ba7750b5f37f))
+
 ## [0.8.1](https://github.com/AshrithSathu/p2pchat/compare/v0.7.0...v0.8.1) (2026-08-08)
 
 ### Features
