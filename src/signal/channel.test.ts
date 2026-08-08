@@ -57,8 +57,8 @@ describe('Signal channel', () => {
       expect(creator.remoteIdentityKey).toEqual(joiner.localIdentityKey);
       expect(creator.remoteFeatures).toContain('image-v1');
       expect(joiner.remoteFeatures).toContain('image-v1');
-      expect(creator.remoteFeatures).toContain('video-call-v1');
-      expect(joiner.remoteFeatures).toContain('video-call-v1');
+      expect(creator.remoteFeatures).toContain('video-call-v2');
+      expect(joiner.remoteFeatures).toContain('video-call-v2');
 
       const heldFrames: unknown[] = [];
       creatorRaw.outboundHook = (value) => heldFrames.push(value);

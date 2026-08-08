@@ -100,25 +100,44 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
-      contents: read
+      contents: write
       pull-requests: write
     env:
       GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
       RELEASE_TAG: ${{ needs.release.outputs.tag_name }}
     steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: develop
+          fetch-depth: 0
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
       - name: Open sync pull request when needed
         run: |
-          ahead_by=$(gh api "repos/$GITHUB_REPOSITORY/compare/develop...main" --jq .ahead_by)
-          if [ "$ahead_by" -eq 0 ]; then
-            exit 0
-          fi
-          existing=$(gh pr list --repo "$GITHUB_REPOSITORY" --base develop --head main --state open --json number --jq '.[0].number // empty')
+          branch="release-sync/${RELEASE_TAG#v}-${GITHUB_RUN_ID}"
+          existing=$(gh pr list --repo "$GITHUB_REPOSITORY" --base develop --head "$branch" --state open --json number --jq '.[0].number // empty')
           if [ -n "$existing" ]; then
             exit 0
           fi
+
+          git switch -c "$branch"
+          git checkout "$RELEASE_TAG" -- \
+            .release-please-manifest.json \
+            CHANGELOG.md \
+            package.json \
+            src/core/version.ts
+
+          if git diff --quiet; then
+            exit 0
+          fi
+
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git commit -m "chore: sync $RELEASE_TAG back to develop"
+          git push origin "$branch"
+
           gh pr create \
             --repo "$GITHUB_REPOSITORY" \
             --base develop \
-            --head main \
+            --head "$branch" \
             --title "chore: sync $RELEASE_TAG back to develop" \
             --body "Synchronizes the automated release version, changelog, and manifest back into the integration branch."
