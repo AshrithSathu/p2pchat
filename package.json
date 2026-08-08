@@ -1,6 +1,6 @@
 {
   "name": "@ashrithsathu/p2pchat",
-  "version": "0.8.2",
+  "version": "0.8.3",
   "description": "End-to-end encrypted, local-first terminal chat",
   "scripts": {
     "test": "vitest run src",
