@@ -31,3 +31,11 @@ jobs:
       - uses: github/codeql-action/analyze@v4
         with:
           category: /language:javascript-typescript
+          output: ../results
+          upload: false
+      - name: Preserve CodeQL results
+        uses: actions/upload-artifact@v7
+        with:
+          name: codeql-sarif
+          path: ../results
+          retention-days: 14
