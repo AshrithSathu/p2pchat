@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
+import { VIDEO_CALL_FEATURE, type CallFrame } from '../call/protocol.js';
 import {
   expectedImageChunkCount,
   IMAGE_CHUNK_BYTES,
@@ -22,6 +23,7 @@ import type { LocalStore, StoredMessage } from '../storage/local-store.js';
 export type ChatEvent =
   | { readonly kind: 'received'; readonly messageId: string }
   | { readonly kind: 'delivered'; readonly messageId: string }
+  | { readonly kind: 'call-signal'; readonly frame: CallFrame }
   | { readonly kind: 'disconnected'; readonly reason: string };
 
 export type ChatEventListener = (event: ChatEvent) => void;
@@ -57,6 +59,13 @@ export class ChatSession {
 
   public get supportsImages(): boolean {
     return this.#connection.remoteFeatures.includes(IMAGE_TRANSFER_FEATURE);
+  }
+
+  public get supportsVideoCalls(): boolean {
+    return (
+      this.#connection.transport === 'relay' &&
+      this.#connection.remoteFeatures.includes(VIDEO_CALL_FEATURE)
+    );
   }
 
   public history(limit = 100): readonly StoredMessage[] {
@@ -161,6 +170,16 @@ export class ChatSession {
     }
   }
 
+  public async sendCallSignal(frame: CallFrame): Promise<void> {
+    this.#assertOpen();
+    if (!this.supportsVideoCalls) {
+      throw new Error(
+        'This peer is using an older p2pchat version without video calls',
+      );
+    }
+    await this.#write(frame);
+  }
+
   public async run(listener: ChatEventListener): Promise<void> {
     this.#assertOpen();
     if (this.#running) {
@@ -187,6 +206,17 @@ export class ChatSession {
             break;
           case 'image-chunk':
             await this.#receiveImageChunk(frame, listener);
+            break;
+          case 'call-offer':
+          case 'call-answer':
+          case 'call-decline':
+          case 'call-end':
+            if (!this.supportsVideoCalls) {
+              throw new Error(
+                'Peer sent call signaling without negotiating call support',
+              );
+            }
+            listener({ kind: 'call-signal', frame });
             break;
         }
       }

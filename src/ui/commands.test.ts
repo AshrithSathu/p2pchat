@@ -24,6 +24,8 @@ describe('parseUiCommand', () => {
     expect(parseUiCommand('/source')).toEqual({ kind: 'source' });
     expect(parseUiCommand('/license')).toEqual({ kind: 'license' });
     expect(parseUiCommand('/update')).toEqual({ kind: 'update' });
+    expect(parseUiCommand('/call')).toEqual({ kind: 'call' });
+    expect(parseUiCommand('/hangup')).toEqual({ kind: 'hangup' });
     expect(parseUiCommand('/reply')).toEqual({ kind: 'help' });
   });
 

@@ -9,6 +9,7 @@ import {
 const MAX_ROOM_LIFETIME_MS = 15 * 60_000;
 const TICKET_LIFETIME_MS = 30_000;
 const MAX_RELAY_FRAME_BYTES = 64 * 1024;
+const MAX_TURN_CREDENTIAL_CLAIMS_PER_ROLE = 32;
 
 const ROOM_SCHEMA = `
   CREATE TABLE IF NOT EXISTS room (
@@ -24,6 +25,14 @@ const ROOM_SCHEMA = `
     ticket_hash TEXT PRIMARY KEY,
     role TEXT NOT NULL CHECK (role IN ('creator', 'joiner')),
     expires_at INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS turn_credential_claims (
+    role TEXT NOT NULL CHECK (role IN ('creator', 'joiner')),
+    call_id TEXT NOT NULL,
+    issued_at INTEGER NOT NULL,
+    attempts INTEGER NOT NULL DEFAULT 1,
+    PRIMARY KEY (role, call_id)
   );
 `;
 
@@ -64,6 +73,13 @@ export type TicketResult =
     }
   | { readonly status: 'forbidden' | 'missing' | 'expired' | 'used' };
 
+export type TurnCredentialClaimResult =
+  | { readonly status: 'ok' }
+  | {
+      readonly status:
+        'forbidden' | 'missing' | 'expired' | 'not_paired' | 'limit_reached';
+    };
+
 export class RelayRoom extends DurableObject<Env> {
   public constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -94,7 +110,9 @@ export class RelayRoom extends DurableObject<Env> {
       return { status: 'conflict' };
     }
 
-    this.ctx.storage.sql.exec('DELETE FROM tickets; DELETE FROM room;');
+    this.ctx.storage.sql.exec(
+      'DELETE FROM turn_credential_claims; DELETE FROM tickets; DELETE FROM room;',
+    );
     this.ctx.storage.sql.exec(
       `INSERT INTO room
         (singleton, encrypted_invite, expires_at, creator_token_hash,
@@ -170,6 +188,73 @@ export class RelayRoom extends DurableObject<Env> {
     return { status: 'ok', ticket, expiresAt };
   }
 
+  public async claimTurnCredentials(
+    role: RelayRole,
+    token: string,
+    callId: string,
+  ): Promise<TurnCredentialClaimResult> {
+    const room = this.#getRoom();
+    if (room === null) {
+      return { status: 'missing' };
+    }
+    if (room.expires_at <= Date.now() && room.paired === 0) {
+      await this.#expire();
+      return { status: 'expired' };
+    }
+    if (
+      room.paired === 0 ||
+      this.ctx.getWebSockets('creator').length !== 1 ||
+      this.ctx.getWebSockets('joiner').length !== 1
+    ) {
+      return { status: 'not_paired' };
+    }
+    const expected =
+      role === 'creator' ? room.creator_token_hash : room.joiner_token_hash;
+    if (!(await tokenMatches(token, expected))) {
+      return { status: 'forbidden' };
+    }
+
+    const prior = this.ctx.storage.sql
+      .exec<{ readonly attempts: number }>(
+        'SELECT attempts FROM turn_credential_claims WHERE role = ? AND call_id = ?',
+        role,
+        callId,
+      )
+      .toArray()[0];
+    if (prior !== undefined) {
+      if (prior.attempts >= 3) {
+        return { status: 'limit_reached' };
+      }
+      this.ctx.storage.sql.exec(
+        `UPDATE turn_credential_claims
+         SET attempts = attempts + 1, issued_at = ?
+         WHERE role = ? AND call_id = ?`,
+        Date.now(),
+        role,
+        callId,
+      );
+      return { status: 'ok' };
+    }
+    const count =
+      this.ctx.storage.sql
+        .exec<{ readonly count: number }>(
+          'SELECT COUNT(*) AS count FROM turn_credential_claims WHERE role = ?',
+          role,
+        )
+        .toArray()[0]?.count ?? 0;
+    if (count >= MAX_TURN_CREDENTIAL_CLAIMS_PER_ROLE) {
+      return { status: 'limit_reached' };
+    }
+    this.ctx.storage.sql.exec(
+      `INSERT INTO turn_credential_claims (role, call_id, issued_at, attempts)
+       VALUES (?, ?, ?, 1)`,
+      role,
+      callId,
+      Date.now(),
+    );
+    return { status: 'ok' };
+  }
+
   public override async fetch(request: Request): Promise<Response> {
     if (request.headers.get('Upgrade')?.toLowerCase() !== 'websocket') {
       return Response.json(
@@ -221,6 +306,7 @@ export class RelayRoom extends DurableObject<Env> {
       this.ctx.storage.sql.exec(
         'UPDATE room SET paired = 1 WHERE singleton = 1; DELETE FROM tickets;',
       );
+      await this.ctx.storage.deleteAlarm();
       sendControl(server, 'paired');
       sendControl(other, 'paired');
     }
@@ -249,12 +335,14 @@ export class RelayRoom extends DurableObject<Env> {
     peer.send(message);
   }
 
-  public override webSocketClose(socket: WebSocket): void {
+  public override async webSocketClose(socket: WebSocket): Promise<void> {
     this.#notifyPeerLeft(socket);
+    await this.#expire();
   }
 
-  public override webSocketError(socket: WebSocket): void {
+  public override async webSocketError(socket: WebSocket): Promise<void> {
     this.#notifyPeerLeft(socket);
+    await this.#expire();
   }
 
   public override async alarm(): Promise<void> {

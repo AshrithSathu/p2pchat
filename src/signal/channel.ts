@@ -14,6 +14,7 @@ import { z } from 'zod';
 
 import type { JsonChannel } from '../network/channel.js';
 import type { LocalStore } from '../storage/local-store.js';
+import { VIDEO_CALL_FEATURE } from '../call/protocol.js';
 import { IMAGE_TRANSFER_FEATURE } from '../image/image.js';
 import {
   PersistentSignalProtocolStore,
@@ -29,7 +30,7 @@ const SIGNAL_PREKEY_MESSAGE_TYPE: number = CiphertextMessageType.PreKey;
 const base64Url = z.string().regex(/^[A-Za-z0-9_-]+$/u);
 const peerId = base64Url.length(43);
 const advertisedFeatureSchema = z.string().regex(/^[a-z0-9-]{1,64}$/u);
-const localFeatures = [IMAGE_TRANSFER_FEATURE] as const;
+const localFeatures = [IMAGE_TRANSFER_FEATURE, VIDEO_CALL_FEATURE] as const;
 
 export const signalOfferSchema = z.object({
   type: z.literal('signal-offer'),
@@ -71,13 +72,15 @@ const signalReadySchema = z.object({
   features: z.array(advertisedFeatureSchema).max(16).optional(),
 });
 
-export type SignalFeature = typeof IMAGE_TRANSFER_FEATURE;
+export type SignalFeature =
+  typeof IMAGE_TRANSFER_FEATURE | typeof VIDEO_CALL_FEATURE;
 
 export interface EstablishSignalChannelOptions {
   readonly inner: JsonChannel;
   readonly localStore: LocalStore;
   readonly peerId: string;
   readonly direction: 'creator' | 'joiner';
+  readonly localFeatures?: readonly SignalFeature[];
 }
 
 export interface EstablishedSignalChannel {
@@ -94,9 +97,20 @@ export async function establishSignalChannel(
   store.clearSession(options.peerId);
 
   try {
+    const advertisedFeatures = options.localFeatures ?? localFeatures;
     return options.direction === 'creator'
-      ? await establishAsCreator(options.inner, store, options.peerId)
-      : await establishAsJoiner(options.inner, store, options.peerId);
+      ? await establishAsCreator(
+          options.inner,
+          store,
+          options.peerId,
+          advertisedFeatures,
+        )
+      : await establishAsJoiner(
+          options.inner,
+          store,
+          options.peerId,
+          advertisedFeatures,
+        );
   } catch (error: unknown) {
     store.clearSession(options.peerId);
     throw error;
@@ -107,6 +121,7 @@ async function establishAsCreator(
   inner: JsonChannel,
   store: PersistentSignalProtocolStore,
   remotePeerId: string,
+  advertisedFeatures: readonly SignalFeature[],
 ): Promise<EstablishedSignalChannel> {
   const generatedBundle = store.createPreKeyBundle();
   const offer = signalOfferSchema.parse({
@@ -117,7 +132,7 @@ async function establishAsCreator(
     creatorPeerId: store.localAddress.name(),
     joinerPeerId: remotePeerId,
     bundle: generatedBundle.data,
-    features: localFeatures,
+    features: advertisedFeatures,
   });
   const signal = AbortSignal.timeout(HANDSHAKE_TIMEOUT_MS);
 
@@ -153,7 +168,7 @@ async function establishAsCreator(
       creatorPeerId: offer.creatorPeerId,
       joinerPeerId: offer.joinerPeerId,
       signalIdentityKey: localIdentityKey.toString('base64url'),
-      features: localFeatures,
+      features: advertisedFeatures,
     });
     const encryptedReady = await signalEncrypt(
       encodePlaintext(ready),
@@ -185,6 +200,7 @@ async function establishAsJoiner(
   inner: JsonChannel,
   store: PersistentSignalProtocolStore,
   remotePeerId: string,
+  advertisedFeatures: readonly SignalFeature[],
 ): Promise<EstablishedSignalChannel> {
   const signal = AbortSignal.timeout(HANDSHAKE_TIMEOUT_MS);
   const offer = await inner.read(signalOfferSchema, signal);
@@ -224,7 +240,7 @@ async function establishAsJoiner(
     creatorPeerId: offer.creatorPeerId,
     joinerPeerId: offer.joinerPeerId,
     signalIdentityKey: localIdentityKey.toString('base64url'),
-    features: localFeatures,
+    features: advertisedFeatures,
   });
   const encryptedInit = await signalEncrypt(
     encodePlaintext(init),
@@ -428,7 +444,15 @@ function serializeKey(key: PublicKey): Buffer {
 function recognizedFeatures(
   features: readonly string[] | undefined,
 ): readonly SignalFeature[] {
-  return features?.includes(IMAGE_TRANSFER_FEATURE)
-    ? [IMAGE_TRANSFER_FEATURE]
-    : [];
+  if (features === undefined) {
+    return [];
+  }
+  const recognized: SignalFeature[] = [];
+  if (features.includes(IMAGE_TRANSFER_FEATURE)) {
+    recognized.push(IMAGE_TRANSFER_FEATURE);
+  }
+  if (features.includes(VIDEO_CALL_FEATURE)) {
+    recognized.push(VIDEO_CALL_FEATURE);
+  }
+  return recognized;
 }

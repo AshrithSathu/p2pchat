@@ -1,12 +1,16 @@
 import { execFile } from 'node:child_process';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 import { z } from 'zod';
 
-const PACKAGE_NAME = '@ashrithsathu/p2pchat';
-const LATEST_PACKAGE_URL =
-  'https://registry.npmjs.org/@ashrithsathu%2Fp2pchat/latest';
+const LATEST_RELEASE_URL =
+  'https://p2pchat-relay.sathuashrith.com/downloads/latest.json';
+const INSTALLER_URL = 'https://p2pchat-relay.sathuashrith.com/install.sh';
 const UPDATE_CHECK_TIMEOUT_MS = 5_000;
 const UPDATE_INSTALL_TIMEOUT_MS = 5 * 60_000;
+const MAX_INSTALLER_BYTES = 64 * 1024;
 
 const packageMetadataSchema = z.object({
   version: z.string(),
@@ -28,10 +32,16 @@ export interface UpdateCheckOptions {
   readonly signal?: AbortSignal;
 }
 
-export type PackageCommandRunner = (
+export type InstallerCommandRunner = (
   executable: string,
   arguments_: readonly string[],
 ) => Promise<void>;
+
+export interface UpdateInstallOptions {
+  readonly fetch?: typeof fetch;
+  readonly platform?: NodeJS.Platform;
+  readonly runner?: InstallerCommandRunner;
+}
 
 export async function checkForUpdate(
   currentVersion: string,
@@ -43,13 +53,13 @@ export async function checkForUpdate(
     options.signal === undefined
       ? timeoutSignal
       : AbortSignal.any([options.signal, timeoutSignal]);
-  const response = await fetchImplementation(LATEST_PACKAGE_URL, {
+  const response = await fetchImplementation(LATEST_RELEASE_URL, {
     headers: { Accept: 'application/json' },
     redirect: 'error',
     signal,
   });
   if (!response.ok) {
-    throw new Error(`npm registry returned HTTP ${String(response.status)}`);
+    throw new Error(`Release service returned HTTP ${String(response.status)}`);
   }
   const metadata = packageMetadataSchema.parse(await response.json());
   return {
@@ -60,16 +70,48 @@ export async function checkForUpdate(
   };
 }
 
-export async function installLatestPackage(
-  runner: PackageCommandRunner = runPackageCommand,
+export async function installLatestRelease(
+  options: UpdateInstallOptions = {},
 ): Promise<void> {
-  await runner(process.platform === 'win32' ? 'npm.cmd' : 'npm', [
-    'install',
-    '--global',
-    '--no-audit',
-    '--no-fund',
-    `${PACKAGE_NAME}@latest`,
-  ]);
+  const platform = options.platform ?? process.platform;
+  if (platform !== 'darwin' && platform !== 'linux') {
+    throw new Error('Automatic updates are supported only on macOS and Linux');
+  }
+
+  const fetchImplementation = options.fetch ?? fetch;
+  const response = await fetchImplementation(INSTALLER_URL, {
+    headers: { Accept: 'text/x-shellscript' },
+    redirect: 'error',
+    signal: AbortSignal.timeout(UPDATE_CHECK_TIMEOUT_MS),
+  });
+  if (!response.ok) {
+    throw new Error(
+      `Installer service returned HTTP ${String(response.status)}`,
+    );
+  }
+  const contentLength = response.headers.get('Content-Length');
+  if (
+    contentLength !== null &&
+    Number.parseInt(contentLength, 10) > MAX_INSTALLER_BYTES
+  ) {
+    throw new Error('Installer response is too large');
+  }
+  const script = await response.text();
+  if (Buffer.byteLength(script, 'utf8') > MAX_INSTALLER_BYTES) {
+    throw new Error('Installer response is too large');
+  }
+  if (!script.startsWith('#!/bin/sh\nset -eu\n')) {
+    throw new Error('Installer service returned an invalid script');
+  }
+
+  const temporaryDirectory = await mkdtemp(join(tmpdir(), 'p2pchat-update-'));
+  const installerPath = join(temporaryDirectory, 'install.sh');
+  try {
+    await writeFile(installerPath, script, { mode: 0o700 });
+    await (options.runner ?? runInstallerCommand)('sh', [installerPath]);
+  } finally {
+    await rm(temporaryDirectory, { recursive: true, force: true });
+  }
 }
 
 export function compareSemanticVersions(left: string, right: string): number {
@@ -157,7 +199,7 @@ function comparePrereleaseIdentifier(left: string, right: string): number {
   return left > right ? 1 : left < right ? -1 : 0;
 }
 
-function runPackageCommand(
+function runInstallerCommand(
   executable: string,
   arguments_: readonly string[],
 ): Promise<void> {
@@ -180,8 +222,8 @@ function runPackageCommand(
         reject(
           new Error(
             detail.length > 0
-              ? `npm could not update p2pchat: ${detail}`
-              : 'npm could not update p2pchat',
+              ? `p2pchat installer failed: ${detail}`
+              : 'p2pchat installer failed',
             { cause: error },
           ),
         );

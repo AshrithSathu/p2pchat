@@ -13,6 +13,7 @@ import {
   deriveRelayLocator,
   isRelayInviteCode,
 } from './invite.js';
+import type { RelayLocator } from './invite.js';
 import { EncryptedJsonChannel } from './secure-channel.js';
 
 import {
@@ -22,6 +23,12 @@ import {
 import type { AuthenticatedSession, InviteHandle } from '../network/service.js';
 import { establishSignalChannel } from '../signal/channel.js';
 import type { LocalStore } from '../storage/local-store.js';
+import type { TurnCredentials } from '../call/protocol.js';
+
+interface ActiveRelayContext {
+  readonly role: 'creator' | 'joiner';
+  readonly locator: RelayLocator;
+}
 
 export interface RelayServiceOptions {
   readonly endpoint: string;
@@ -31,6 +38,7 @@ export class RelayService {
   readonly #store: LocalStore;
   readonly #api: RelayApiClient;
   #cancelPending: ((error: Error) => void) | null = null;
+  #activeContext: ActiveRelayContext | null = null;
   #stopped = false;
 
   public constructor(store: LocalStore, options: RelayServiceOptions) {
@@ -51,11 +59,9 @@ export class RelayService {
     const material = createRelayRoomMaterial(this.#store.identity, ttlMs);
     await this.#api.createRoom(material);
     const rawChannel = await this.#api.connect('creator', material);
-    const connected = this.#acceptPeer(material.invite, rawChannel).finally(
-      () => {
-        this.#cancelPending = null;
-      },
-    );
+    const connected = this.#acceptPeer(material, rawChannel).finally(() => {
+      this.#cancelPending = null;
+    });
     this.#cancelPending = (error) => rawChannel.abort(error);
 
     return {
@@ -97,6 +103,7 @@ export class RelayService {
         peerId: authenticated.peer.id,
         direction: 'joiner',
       });
+      this.#activeContext = { role: 'joiner', locator };
       return {
         channel: signalSession.channel,
         peer: authenticated.peer,
@@ -121,6 +128,18 @@ export class RelayService {
     }
   }
 
+  public async createTurnCredentials(callId: string): Promise<TurnCredentials> {
+    this.#assertRunning();
+    if (this.#activeContext === null) {
+      throw new Error('Connect to a peer before starting a video call');
+    }
+    return await this.#api.fetchTurnCredentials(
+      this.#activeContext.role,
+      this.#activeContext.locator,
+      callId,
+    );
+  }
+
   public stop(): void {
     if (this.#stopped) {
       return;
@@ -128,19 +147,20 @@ export class RelayService {
     this.#stopped = true;
     this.#cancelPending?.(new Error('Internet relay stopped'));
     this.#cancelPending = null;
+    this.#activeContext = null;
   }
 
   async #acceptPeer(
-    invite: ReturnType<typeof createRelayRoomMaterial>['invite'],
+    material: ReturnType<typeof createRelayRoomMaterial>,
     rawChannel: Awaited<ReturnType<RelayApiClient['connect']>>,
   ): Promise<AuthenticatedSession> {
     const handshake = new EncryptedJsonChannel(
       rawChannel,
-      createPreSharedChannelKeys(invite, 'creator'),
+      createPreSharedChannelKeys(material.invite, 'creator'),
     );
     try {
       const join = await handshake.read(relayJoinSchema);
-      const authenticated = acceptRelayJoin(this.#store, invite, join);
+      const authenticated = acceptRelayJoin(this.#store, material.invite, join);
       await handshake.write(authenticated.message);
       handshake.destroyKeys();
       const peer = describePeerIdentity(authenticated.peer.publicKey);
@@ -150,6 +170,7 @@ export class RelayService {
         peerId: peer.id,
         direction: 'creator',
       });
+      this.#activeContext = { role: 'creator', locator: material };
       return {
         channel: signalSession.channel,
         peer,

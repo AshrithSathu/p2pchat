@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 
 import { expectedImageChunkCount, MAX_IMAGE_BYTES } from '../image/image.js';
+import { assertRelayOnlySdp } from '../call/protocol.js';
 import {
   chatMessageSchema,
   imageChunkSchema,
@@ -84,5 +85,26 @@ describe('image protocol', () => {
         data: 'A'.repeat(17_001),
       }),
     ).toThrow();
+  });
+});
+
+describe('video call privacy protocol', () => {
+  it('accepts relay-only SDP and rejects direct ICE candidates', () => {
+    const relaySdp = [
+      'v=0',
+      'a=candidate:1 1 UDP 1 203.0.113.5 50000 typ relay raddr 0.0.0.0 rport 0',
+    ].join('\r\n');
+    const directSdp = [
+      'v=0',
+      'a=candidate:1 1 UDP 1 192.0.2.7 50000 typ host',
+    ].join('\r\n');
+
+    expect(() => assertRelayOnlySdp(relaySdp)).not.toThrow();
+    expect(() => assertRelayOnlySdp(directSdp)).toThrow(
+      'attempted to expose a direct address',
+    );
+    expect(() => assertRelayOnlySdp('v=0')).toThrow(
+      'contains no TURN relay candidate',
+    );
   });
 });

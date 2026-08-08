@@ -2,8 +2,16 @@
   "$schema": "../node_modules/wrangler/config-schema.json",
   "name": "p2pchat-relay",
   "main": "src/index.ts",
-  "compatibility_date": "2026-08-04",
+  "compatibility_date": "2026-08-06",
   "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "TURN_PROVIDER": "cloudflare",
+    "COTURN_SHARED_SECRET": "",
+    "COTURN_URLS": "",
+  },
+  "secrets": {
+    "required": ["TURN_KEY_ID", "TURN_KEY_API_TOKEN"],
+  },
   "routes": [
     {
       "pattern": "p2pchat-relay.sathuashrith.com",
@@ -13,6 +21,12 @@
   "durable_objects": {
     "bindings": [{ "name": "RELAY_ROOMS", "class_name": "RelayRoom" }],
   },
+  "r2_buckets": [
+    {
+      "binding": "RELEASES",
+      "bucket_name": "p2pchat-releases",
+    },
+  ],
   "exports": {
     "RelayRoom": {
       "type": "durable-object",

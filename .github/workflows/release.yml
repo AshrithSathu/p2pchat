@@ -3,12 +3,6 @@ name: Release
 on:
   push:
     branches: [main]
-  workflow_dispatch:
-    inputs:
-      release_tag:
-        description: Existing release tag to publish again (for example, v0.6.0)
-        required: false
-        type: string
 
 permissions:
   contents: read
@@ -38,17 +32,15 @@ jobs:
           manifest-file: .release-please-manifest.json
 
   publish:
-    name: Publish packages
+    name: Publish private distribution
     needs: release
-    if: ${{ needs.release.outputs.release_created == 'true' || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '') }}
+    if: ${{ needs.release.outputs.release_created == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
       contents: write
-      id-token: write
-      packages: write
     env:
-      RELEASE_TAG: ${{ needs.release.outputs.tag_name || inputs.release_tag }}
+      RELEASE_TAG: ${{ needs.release.outputs.tag_name }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -59,7 +51,6 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 24
-          registry-url: https://registry.npmjs.org
           package-manager-cache: false
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
@@ -69,31 +60,38 @@ jobs:
           test "v$(node -p "require('./package.json').version")" = "$RELEASE_TAG"
           test "v$(node -e "import('./dist/core/version.js').then(({ APP_VERSION }) => process.stdout.write(APP_VERSION))")" = "$RELEASE_TAG"
       - name: Build release artifacts
-        run: |
-          mkdir -p release
-          pnpm pack --pack-destination release
-          cd release
-          sha256sum *.tgz > SHA256SUMS.txt
+        run: pnpm distribution:build
       - name: Upload GitHub release artifacts
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release upload "$RELEASE_TAG" release/* --clobber
-      - name: Publish to npm
-        run: >-
-          npm publish ./release/*.tgz
-          --registry=https://registry.npmjs.org
-          --access public
-      - name: Configure GitHub Packages
-        uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          registry-url: https://npm.pkg.github.com
-          scope: '@ashrithsathu'
-          package-manager-cache: false
-      - name: Publish to GitHub Packages
-        run: npm publish ./release/*.tgz --registry=https://npm.pkg.github.com
+      - name: Upload versioned archives to Cloudflare R2
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          for archive in release/*.tar.gz; do
+            filename=$(basename "$archive")
+            node relay/node_modules/wrangler/bin/wrangler.js r2 object put \
+              "p2pchat-releases/releases/$filename" \
+              --file "$archive" \
+              --content-type application/gzip \
+              --cache-control 'public, max-age=31536000, immutable' \
+              --remote
+          done
+      - name: Publish release manifest last
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          node relay/node_modules/wrangler/bin/wrangler.js r2 object put \
+            p2pchat-releases/releases/latest.json \
+            --file release/latest.json \
+            --content-type application/json \
+            --cache-control no-store \
+            --remote
 
   sync-develop:
     name: Open main-to-develop sync

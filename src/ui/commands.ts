@@ -6,7 +6,9 @@ import {
 } from '@earendil-works/pi-tui';
 
 export type UiAction =
+  | Readonly<{ kind: 'call' }>
   | Readonly<{ kind: 'clear' }>
+  | Readonly<{ kind: 'hangup' }>
   | Readonly<{ kind: 'help' }>
   | Readonly<{ kind: 'join'; code: string | null }>
   | Readonly<{ kind: 'message'; body: string }>
@@ -25,6 +27,8 @@ export const UI_COMMAND_SUGGESTIONS = [
     description: 'Join using an invite code',
     argumentHint: '<code>',
   },
+  { name: 'call', description: 'Start an encrypted video call' },
+  { name: 'hangup', description: 'End the current video call' },
   { name: 'help', description: 'Show all commands' },
   { name: 'clear', description: 'Clear the activity panel' },
   { name: 'update', description: 'Install the latest p2pchat version' },
@@ -71,10 +75,14 @@ export function parseUiCommand(input: string): UiAction | null {
   const argument = firstSpace === -1 ? '' : value.slice(firstSpace + 1).trim();
 
   switch (command.toLowerCase()) {
+    case '/call':
+      return { kind: 'call' };
     case '/clear':
       return { kind: 'clear' };
     case '/help':
       return { kind: 'help' };
+    case '/hangup':
+      return { kind: 'hangup' };
     case '/join':
       return { kind: 'join', code: argument.length > 0 ? argument : null };
     case '/license':

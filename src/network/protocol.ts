@@ -8,6 +8,13 @@ import {
   MAX_IMAGE_BYTES,
   SUPPORTED_IMAGE_MIME_TYPES,
 } from '../image/image.js';
+import {
+  callAnswerSchema,
+  callDeclineSchema,
+  callEndSchema,
+  callOfferSchema,
+  type CallFrame,
+} from '../call/protocol.js';
 
 const MAX_FRAME_BYTES = 64 * 1024;
 const base64Url = z.string().regex(/^[A-Za-z0-9_-]+$/u);
@@ -99,6 +106,10 @@ export const chatFrameSchema = z.discriminatedUnion('type', [
   imageMessageSchema,
   imageChunkSchema,
   acknowledgementSchema,
+  callOfferSchema,
+  callAnswerSchema,
+  callDeclineSchema,
+  callEndSchema,
 ]);
 
 export type JoinMessage = z.infer<typeof joinMessageSchema>;
@@ -108,7 +119,12 @@ export type ChatMessage = z.infer<typeof chatMessageSchema>;
 export type Acknowledgement = z.infer<typeof acknowledgementSchema>;
 export type ImageMessage = z.infer<typeof imageMessageSchema>;
 export type ImageChunk = z.infer<typeof imageChunkSchema>;
-export type ChatFrame = z.infer<typeof chatFrameSchema>;
+export type ChatFrame =
+  | z.infer<typeof chatMessageSchema>
+  | z.infer<typeof imageMessageSchema>
+  | z.infer<typeof imageChunkSchema>
+  | z.infer<typeof acknowledgementSchema>
+  | CallFrame;
 
 export class FrameChannel implements JsonChannel {
   readonly #stream: Stream;

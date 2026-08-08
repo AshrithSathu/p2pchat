@@ -48,6 +48,21 @@ describe.skipIf(!runLiveTest)('deployed Internet relay', () => {
       expect(creatorSession.peer.id).toBe(joinerStore.identity.id);
       expect(joinerSession.peer.id).toBe(creatorStore.identity.id);
 
+      const callId = crypto.randomUUID();
+      const [creatorTurn, joinerTurn] = await Promise.all([
+        creatorRelay.createTurnCredentials(callId),
+        joinerRelay.createTurnCredentials(callId),
+      ]);
+      for (const credentials of [creatorTurn, joinerTurn]) {
+        expect(credentials.expiresAt).toBeGreaterThan(Date.now());
+        expect(credentials.iceServers).not.toHaveLength(0);
+        expect(credentials.iceServers.flatMap((server) => server.urls)).toEqual(
+          expect.arrayContaining([
+            expect.stringMatching(/^turns?:turn\.cloudflare\.com:/u),
+          ]),
+        );
+      }
+
       const messageSchema = z.object({
         type: z.literal('live-relay-test'),
         body: z.string(),
