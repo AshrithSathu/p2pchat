@@ -31,7 +31,7 @@ import {
 } from '../network/service.js';
 import { sanitizeTerminalText } from '../security/message-body.js';
 import { resolveRelayEndpoint } from '../relay/config.js';
-import { RelayService } from '../relay/service.js';
+import { RelayPeerOfflineError, RelayService } from '../relay/service.js';
 import {
   LocalStore,
   type LocalIdentity,
@@ -654,7 +654,24 @@ function createLayout(
           );
           break;
         }
-        await callController.start();
+        if (disconnectedReason !== null) {
+          setActivityText(
+            `${ansi.red('Peer is offline')}\nBoth people must keep p2pchat open. Restart and create a fresh Internet invite to reconnect.`,
+          );
+          break;
+        }
+        try {
+          await callController.start();
+        } catch (error: unknown) {
+          if (!(error instanceof RelayPeerOfflineError)) {
+            throw error;
+          }
+          disconnectedReason = error.message;
+          callStatusText = null;
+          setActivityText(
+            `${ansi.red('Peer is offline')}\nThe other person is no longer connected. Keep both terminals open, or restart and create a fresh Internet invite.`,
+          );
+        }
         break;
       case 'clear':
         if (currentChat === null) {
