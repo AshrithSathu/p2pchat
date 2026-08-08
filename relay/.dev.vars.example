@@ -1,0 +1,9 @@
+# Free localhost development with `pnpm relay:dev:free`.
+TURN_PROVIDER=coturn
+COTURN_SHARED_SECRET=generated-by-pnpm-turn-setup
+COTURN_URLS=turn:127.0.0.1:3478?transport=udp,turn:127.0.0.1:3478?transport=tcp
+
+# Wrangler currently requires these production bindings. They are ignored when
+# TURN_PROVIDER=coturn.
+TURN_KEY_ID=unused-by-local-coturn
+TURN_KEY_API_TOKEN=unused-by-local-coturn

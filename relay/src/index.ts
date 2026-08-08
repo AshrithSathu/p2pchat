@@ -2,9 +2,12 @@ import {
   createRoomSchema,
   roomIdSchema,
   ticketRequestSchema,
+  turnCredentialsRequestSchema,
 } from './schema.js';
 import { installerResponse, landingPageResponse } from './installer.js';
 import type { RelayRoom } from './room.js';
+import { generateTurnCredentials } from './turn.js';
+import { distributionResponse, loadLatestRelease } from './distribution.js';
 
 export { RelayRoom } from './room.js';
 
@@ -31,18 +34,29 @@ export default {
 async function route(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   if (url.pathname === '' || /^\/+$/u.test(url.pathname)) {
-    return landingPageResponse(request.method);
+    return landingPageResponse(
+      request.method,
+      await loadLatestRelease(env.RELEASES),
+    );
   }
   if (url.pathname === '/install.sh') {
-    return installerResponse(request.method);
+    return installerResponse(
+      request.method,
+      request.url,
+      await loadLatestRelease(env.RELEASES),
+    );
+  }
+  if (url.pathname.startsWith('/downloads/')) {
+    return await distributionResponse(request, env.RELEASES);
   }
   if (request.method === 'GET' && url.pathname === '/health') {
     return json({ status: 'ok', service: 'p2pchat-relay', version: 1 });
   }
 
-  const match = /^\/v1\/rooms\/([^/]+)(?:\/(invite|ticket|connect))?$/u.exec(
-    url.pathname,
-  );
+  const match =
+    /^\/v1\/rooms\/([^/]+)(?:\/(invite|ticket|connect|turn-credentials))?$/u.exec(
+      url.pathname,
+    );
   if (match === null) {
     return json({ error: 'Not found' }, 404);
   }
@@ -93,11 +107,55 @@ async function route(request: Request, env: Env): Promise<Response> {
     return relayResult(result);
   }
 
+  if (request.method === 'POST' && action === 'turn-credentials') {
+    const token = bearerToken(request);
+    if (token === null) {
+      return json({ error: 'Authentication required' }, 401);
+    }
+    const body = turnCredentialsRequestSchema.safeParse(
+      await readBoundedJson(request),
+    );
+    if (!body.success) {
+      return json({ error: 'Invalid TURN credential request' }, 400);
+    }
+    const claim = await room.claimTurnCredentials(
+      body.data.role,
+      token,
+      body.data.callId,
+    );
+    if (claim.status !== 'ok') {
+      return turnClaimResult(claim.status);
+    }
+    return json(
+      await generateTurnCredentials(env, body.data.callId, Date.now()),
+    );
+  }
+
   if (request.method === 'GET' && action === 'connect') {
     return await room.fetch(request);
   }
 
   return json({ error: 'Method not allowed' }, 405);
+}
+
+function turnClaimResult(
+  status: Exclude<
+    Awaited<ReturnType<RelayRoom['claimTurnCredentials']>>['status'],
+    'ok'
+  >,
+): Response {
+  switch (status) {
+    case 'forbidden':
+      return json({ error: 'Relay authentication failed' }, 403);
+    case 'missing':
+      return json({ error: 'Relay room not found' }, 404);
+    case 'expired':
+      return json({ error: 'Relay room expired' }, 410);
+    case 'not_paired':
+      return json({ error: 'Relay peer is not connected' }, 409);
+    case 'limit_reached':
+      return json({ error: 'Call credential limit reached' }, 429);
+  }
 }
 
 function relayResult(

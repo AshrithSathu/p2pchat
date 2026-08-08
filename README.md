@@ -1,8 +1,6 @@
 # p2pchat
 
-[![npm version](https://img.shields.io/npm/v/@ashrithsathu/p2pchat.svg)](https://www.npmjs.com/package/@ashrithsathu/p2pchat)
 [![CI](https://github.com/AshrithSathu/p2pchat/actions/workflows/ci.yml/badge.svg)](https://github.com/AshrithSathu/p2pchat/actions/workflows/ci.yml)
-[![license](https://img.shields.io/npm/l/@ashrithsathu/p2pchat.svg)](LICENSE)
 
 Fast, local-first, end-to-end encrypted terminal chat written in strict
 TypeScript. Peers can connect across ordinary NAT and firewall boundaries using
@@ -17,7 +15,7 @@ Website: [p2pchat.sathuashrith.com](https://p2pchat.sathuashrith.com)
 
 ## Install
 
-Requirements: Node.js 22.19 or newer and Corepack.
+Requirement: Node.js 22.19 or newer.
 
 One-command install for macOS and Linux:
 
@@ -25,30 +23,16 @@ One-command install for macOS and Linux:
 curl -fsSL https://p2pchat-relay.sathuashrith.com/install.sh | sh
 ```
 
-The installer is version-pinned, never invokes `sudo`, and verifies the
-installed command. To inspect it before running:
+The installer downloads a platform-specific archive from the p2pchat release
+service, verifies its SHA-256 checksum, never invokes `sudo`, and atomically
+switches `~/.local/bin/p2pchat` to the verified version. It does not install the
+application from npm. To inspect it before running:
 
 ```sh
 curl -fsSLo p2pchat-install.sh \
   https://p2pchat-relay.sathuashrith.com/install.sh
 less p2pchat-install.sh
 sh p2pchat-install.sh
-```
-
-You can also install directly from npm with pnpm:
-
-```sh
-corepack enable
-corepack pnpm add --global \
-  --allow-build=better-sqlite3 \
-  --allow-build=@signalapp/libsignal-client \
-  @ashrithsathu/p2pchat
-```
-
-The standard npm client is supported too:
-
-```sh
-npm install --global @ashrithsathu/p2pchat
 ```
 
 Start or create a local profile:
@@ -100,6 +84,33 @@ attached to each message. Kitty, Ghostty, WezTerm, Warp, and iTerm2 display
 images inline using terminal-native graphics. Other terminals show a compact
 metadata fallback.
 
+## Make an encrypted video call
+
+Video calls are available after connecting through an Internet relay invite.
+Type `/call`; p2pchat opens a localhost-only browser window where the operating
+system asks for camera and microphone permission. The other terminal receives
+an accept/decline prompt. Use `/hangup` or the red button in the call window to
+end the call.
+
+Calls are deliberately one-to-one and fail closed:
+
+- SDP offers and answers travel inside the authenticated Signal Double Ratchet.
+- WebRTC encrypts audio and video end to end with DTLS-SRTP.
+- `iceTransportPolicy: "relay"` is mandatory. Both SDP candidates and the
+  selected WebRTC candidate pair are checked to be TURN relays.
+- Camera/microphone transmission and remote playback remain disabled until the
+  selected TURN candidate pair has been independently verified.
+- There is no direct WebRTC fallback. If TURN is unavailable, the call fails.
+- Participants do not receive one another's IP addresses. The selected TURN
+  operator still observes each participant's IP address, timing, and encrypted
+  traffic volume.
+- Camera and microphone data are never written to the p2pchat database. Calls
+  are not recorded.
+
+The call window must remain open while the call is active. Video calls are not
+available in `/new-local` direct chats because that route cannot provide the
+peer-IP-hiding guarantee.
+
 ## Commands
 
 | Command        | Action                                         |
@@ -107,6 +118,8 @@ metadata fallback.
 | `/new`         | Create a short-lived Internet invitation       |
 | `/new-local`   | Create a direct invitation for reachable peers |
 | `/join <code>` | Join an Internet or direct invitation          |
+| `/call`        | Start a TURN-only encrypted video call         |
+| `/hangup`      | End the current video call                     |
 | `/update`      | Install the latest published p2pchat version   |
 | `/clear`       | Clear the activity panel                       |
 | `/help`        | Show command help                              |
@@ -118,11 +131,12 @@ Typing `/` opens Pi-style command autocomplete. Continue typing to fuzzy-filter,
 use Up/Down to select, Tab to insert without running, Enter to execute, and
 Escape to close the menu. `/exit` is an alias for `/quit`.
 
-At startup, p2pchat checks npm for a newer published version without delaying
-the interface. When one exists, a dismissible popup shows the installed and
-latest versions. Run `/update` to install `@ashrithsathu/p2pchat@latest` through
-npm, then restart p2pchat. Set `P2PCHAT_DISABLE_UPDATE_CHECK=1` to disable the
-automatic startup check; `/update` still works when invoked explicitly.
+At startup, p2pchat checks the first-party release service for a newer version
+without delaying the interface. When one exists, a dismissible popup shows the
+installed and latest versions. Run `/update` to download and run the same
+checksum-verifying hosted installer, then restart p2pchat. Set
+`P2PCHAT_DISABLE_UPDATE_CHECK=1` to disable the automatic startup check;
+`/update` still works when invoked explicitly.
 
 ## Local profiles
 
@@ -156,6 +170,12 @@ versions before profiles remain available through the `default` profile.
 - Image transfers are negotiated as an optional protocol feature and split into
   small chunks; every chunk passes through the same Signal Double Ratchet as
   text messages. The relay never receives image plaintext.
+- Video-call capability is negotiated separately. Call signaling stays inside
+  Signal ciphertext, while short-lived TURN credentials are issued only to the
+  two authenticated relay roles for that chat.
+- Audio and video use mandatory TURN with WebRTC DTLS-SRTP. Production defaults
+  to Cloudflare TURN; free local development can use self-hosted Coturn. The
+  selected relay can route packets but cannot decrypt the media.
 - The relay forwards opaque ciphertext and does not store chat messages.
 - `/new-local` keeps the original direct TCP/libp2p mode for peers that can
   reach one another without the relay.
@@ -186,16 +206,21 @@ self-hosted relay.
   systems, and SQLite secure deletion is enabled.
 - Received messages are stripped of terminal control and bidirectional override
   characters before display.
+- The video-call HTTP bridge binds only to `127.0.0.1`, requires a random
+  per-window bearer token, serves a restrictive Content Security Policy, and is
+  closed when the call ends.
 
 The database is not fully opaque: timestamps, delivery state, sequence numbers,
-public keys, and peer identifiers remain visible. Cloudflare can observe IP
-addresses, timing, room locators, and ciphertext sizes. A compromised unlocked
-device, administrator access, malware, backups, filesystem snapshots, or an
-exposed/weak profile password can defeat local protection.
+public keys, and peer identifiers remain visible. The rendezvous and TURN
+operators can observe IP addresses, timing, room locators, call timing, and
+ciphertext sizes. A compromised unlocked device, administrator access, malware,
+backups, filesystem snapshots, or an exposed/weak profile password can defeat
+local protection.
 
-The optional startup update check contacts the public npm registry, which can
-observe the request IP address and package being checked. It never sends chat,
-profile, identity, or database data.
+The optional startup update check contacts the p2pchat release service, which
+can observe the request IP address. Archive downloads also reveal the operating
+system and CPU family through the requested filename. Neither request sends
+chat, profile, identity, or database data.
 
 This project is not affiliated with Signal. Signal documents external use of
 libsignal as unsupported, so the exact dependency version is intentionally
@@ -211,6 +236,43 @@ corepack pnpm install --frozen-lockfile
 corepack pnpm dev --profile alice
 ```
 
+### Free local video-call test
+
+Docker is the only additional requirement. Coturn is open source, runs only on
+localhost in this setup, and uses a generated shared secret stored in ignored
+owner-only files. No Cloudflare Realtime subscription or TURN key is required.
+
+Start Coturn and the local relay Worker:
+
+```sh
+corepack pnpm relay:dev:free
+```
+
+Then start two clients in separate terminals:
+
+```sh
+P2PCHAT_RELAY_URL=http://127.0.0.1:8787 \
+  corepack pnpm dev --profile alice
+```
+
+```sh
+P2PCHAT_RELAY_URL=http://127.0.0.1:8787 \
+  corepack pnpm dev --profile bob
+```
+
+Create an Internet invite locally with `/new`, join it from the other terminal,
+and run `/call`. Stop Coturn afterward with:
+
+```sh
+corepack pnpm turn:down
+```
+
+This localhost configuration is for two clients on the same computer. Testing
+from different internet connections still requires one publicly reachable TURN
+server. You can run the same Coturn image on a server or a port-forwarded
+machine, expose TCP/UDP 3478 and the configured UDP relay range, set its public
+`external-ip`, and place the resulting `turn:`/`turns:` URLs in `COTURN_URLS`.
+
 Run the complete client, relay, and landing-page checks before submitting
 changes:
 
@@ -223,6 +285,22 @@ The checks include strict TypeScript, ESLint, formatting, protocol and storage
 tests, a Workers-runtime Durable Object integration test, and a Wrangler deploy
 dry run for both Cloudflare projects. See [CONTRIBUTING.md](CONTRIBUTING.md) for
 the development workflow.
+
+## Distribution
+
+Customer installation and `/update` do not use npm. Build the four macOS/Linux
+x64/arm64 runtime archives, their SHA-256 manifest, and the corresponding source
+archive with:
+
+```sh
+corepack pnpm distribution:build
+```
+
+Generated artifacts are written to the ignored `release/` directory. Production
+stores them in the private `p2pchat-releases` R2 bucket; the relay Worker streams
+only validated, versioned archive names through `/downloads/`. Upload versioned
+archives first and `latest.json` last so clients never observe a partially
+published release.
 
 ## Landing page development
 
@@ -243,6 +321,19 @@ corepack pnpm relay:dev
 corepack pnpm relay:test
 corepack pnpm relay:deploy
 ```
+
+The production Cloudflare provider requires a Cloudflare Realtime TURN key.
+Keep both values in Worker secrets; never add them to `wrangler.jsonc` or source
+control:
+
+```sh
+corepack pnpm --dir relay exec wrangler secret put TURN_KEY_ID
+corepack pnpm --dir relay exec wrangler secret put TURN_KEY_API_TOKEN
+```
+
+For local relay development, copy `relay/.dev.vars.example` to
+`relay/.dev.vars` and replace the placeholders. The real file is ignored by
+Git.
 
 To exercise the full client protocol against the deployed relay:
 

@@ -14,9 +14,12 @@
 
 The final merge updates `package.json`, `src/core/version.ts`,
 `.release-please-manifest.json`, and `CHANGELOG.md`; creates the matching `v*`
-tag and GitHub Release; attaches the package tarball and checksum; and publishes
-to npm and GitHub Packages. Synchronizing `main` back into `develop` prevents
-the next integration pull request from reverting generated version files.
+tag and GitHub Release; and publishes platform runtime archives, checksums, and
+corresponding source to the private
+GitHub Release and the `p2pchat-releases` Cloudflare R2 bucket. The release
+manifest is uploaded last, so the hosted installer changes atomically.
+Synchronizing `main` back into `develop` prevents the next integration pull
+request from reverting generated version files.
 
 Do not manually edit release versions. To force a specific version, add a
 `Release-As: x.y.z` footer to a Conventional Commit on `main`.
@@ -34,15 +37,12 @@ token do not trigger other GitHub Actions workflows. The dedicated token is
 therefore required for generated release pull requests to receive the checks
 required by branch protection.
 
-### npm trusted publishing
+### Cloudflare R2 publishing
 
-In the settings for `@ashrithsathu/p2pchat` on npm, configure a GitHub Actions
-trusted publisher with these exact values:
+Create a Cloudflare API token limited to object read/write for the
+`p2pchat-releases` R2 bucket. Store it in the private repository as the Actions
+secret `CLOUDFLARE_API_TOKEN`. Store the Cloudflare account ID as
+`CLOUDFLARE_ACCOUNT_ID`.
 
-- Organization or user: `AshrithSathu`
-- Repository: `p2pchat`
-- Workflow filename: `release.yml`
-- Allowed action: `npm publish`
-
-The release workflow uses GitHub OIDC, so no long-lived npm token is stored in
-the repository. npm automatically records provenance for the public package.
+Do not use a global API key. Rotate the scoped token immediately if workflow
+logs or repository access are compromised.

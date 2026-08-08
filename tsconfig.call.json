@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "declaration": false,
+    "declarationMap": false,
+    "outDir": "dist",
+    "rootDir": "src",
+    "sourceMap": false,
+    "types": []
+  },
+  "include": ["src/call/browser-app.ts"]
+}

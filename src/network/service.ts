@@ -35,6 +35,7 @@ import {
 } from './protocol.js';
 import { establishSignalChannel } from '../signal/channel.js';
 import type { SignalFeature } from '../signal/channel.js';
+import { IMAGE_TRANSFER_FEATURE } from '../image/image.js';
 
 export const CHAT_PROTOCOL = '/p2pchat/1.0.0';
 const HANDSHAKE_TIMEOUT_MS = 15_000;
@@ -209,6 +210,7 @@ export class P2PService {
         localStore: this.#store,
         peerId: peer.id,
         direction: 'joiner',
+        localFeatures: [IMAGE_TRANSFER_FEATURE],
       });
 
       return {
@@ -299,6 +301,7 @@ export class P2PService {
         localStore: this.#store,
         peerId: peer.id,
         direction: 'creator',
+        localFeatures: [IMAGE_TRANSFER_FEATURE],
       });
       pending.resolve({
         channel: signalSession.channel,

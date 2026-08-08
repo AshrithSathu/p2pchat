@@ -1,10 +1,11 @@
 {
   "name": "@ashrithsathu/p2pchat",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "End-to-end encrypted, local-first terminal chat",
   "scripts": {
     "test": "vitest run src",
-    "dev": "tsx src/cli.ts",
+    "dev": "pnpm build:call && tsx src/cli.ts",
+    "build:call": "tsc -p tsconfig.call.json",
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/cli.js",
     "typecheck": "tsc --noEmit",
@@ -14,6 +15,7 @@
     "test:watch": "vitest src",
     "check:client": "pnpm typecheck && pnpm lint && pnpm test && pnpm run format:check",
     "relay:dev": "pnpm --dir relay dev",
+    "relay:dev:free": "pnpm turn:up && pnpm --dir relay dev",
     "relay:test": "pnpm --dir relay test",
     "relay:check": "pnpm --dir relay check",
     "relay:deploy": "pnpm --dir relay deploy",
@@ -21,8 +23,11 @@
     "landing:dev": "pnpm --dir landing dev",
     "landing:check": "pnpm --dir landing check",
     "landing:deploy": "pnpm --dir landing deploy",
-    "check": "pnpm check:client && pnpm relay:check && pnpm landing:check",
-    "prepack": "pnpm check:client && pnpm build"
+    "distribution:build": "pnpm build && tsx scripts/build-distribution.ts",
+    "turn:setup": "tsx scripts/setup-free-turn.ts",
+    "turn:up": "pnpm turn:setup && docker compose --env-file dev/coturn/.env -f dev/coturn/compose.yaml up -d",
+    "turn:down": "docker compose --env-file dev/coturn/.env -f dev/coturn/compose.yaml down",
+    "check": "pnpm check:client && pnpm relay:check && pnpm landing:check"
   },
   "license": "AGPL-3.0-only",
   "type": "module",
@@ -85,10 +90,6 @@
     "signal-protocol",
     "local-first"
   ],
-  "publishConfig": {
-    "access": "public",
-    "registry": "https://registry.npmjs.org/"
-  },
-  "preferGlobal": true,
-  "author": "AshrithSathu"
+  "author": "AshrithSathu",
+  "private": true
 }

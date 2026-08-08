@@ -55,7 +55,7 @@ When `develop` is stable, open a pull request from `develop` to `main`. Merging
 that pull request updates the generated Release Please pull request; it does not
 publish immediately. Merging the generated release pull request updates
 `package.json`, `src/core/version.ts`, and `CHANGELOG.md`, creates the `v*` tag
-and GitHub Release, and publishes the npm and GitHub packages.
+and private GitHub Release, and publishes checksum-verified runtime archives.
 
 Maintainer setup and recovery instructions are in
 [`.github/RELEASING.md`](.github/RELEASING.md).

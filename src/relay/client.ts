@@ -1,5 +1,9 @@
 import { z } from 'zod';
 
+import {
+  turnCredentialsSchema,
+  type TurnCredentials,
+} from '../call/protocol.js';
 import type { RelayLocator, RelayRoomMaterial } from './invite.js';
 import { WebSocketJsonChannel } from './websocket-channel.js';
 
@@ -86,6 +90,27 @@ export class RelayApiClient {
     url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
     url.searchParams.set('ticket', ticket.ticket);
     return await WebSocketJsonChannel.connect(url);
+  }
+
+  public async fetchTurnCredentials(
+    role: RelayRole,
+    locator: RelayLocator,
+    callId: string,
+  ): Promise<TurnCredentials> {
+    const token =
+      role === 'creator' ? locator.creatorToken : locator.joinerToken;
+    return await this.#request(
+      `/v1/rooms/${locator.roomId}/turn-credentials`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ version: 1, role, callId }),
+      },
+      turnCredentialsSchema,
+    );
   }
 
   async #request<Schema extends z.ZodType>(

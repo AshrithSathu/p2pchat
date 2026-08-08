@@ -18,5 +18,21 @@ export const ticketRequestSchema = z.object({
   role: z.enum(['creator', 'joiner']),
 });
 
+export const turnCredentialsRequestSchema = z.object({
+  version: z.literal(1),
+  role: z.enum(['creator', 'joiner']),
+  callId: z.uuid(),
+});
+
+const cloudflareIceServerSchema = z.object({
+  urls: z.union([z.string().max(512), z.array(z.string().max(512)).max(16)]),
+  username: z.string().min(1).max(512).optional(),
+  credential: z.string().min(1).max(512).optional(),
+});
+
+export const cloudflareTurnResponseSchema = z.object({
+  iceServers: z.array(cloudflareIceServerSchema).min(1).max(8),
+});
+
 export type RelayRole = z.infer<typeof ticketRequestSchema>['role'];
 export type CreateRoomRequest = z.infer<typeof createRoomSchema>;

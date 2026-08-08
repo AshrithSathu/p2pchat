@@ -66,9 +66,13 @@ describe('P2PService', () => {
       expect(joinerSession.direction).toBe('joiner');
       expect(creatorSession.remoteFeatures).toContain('image-v1');
       expect(joinerSession.remoteFeatures).toContain('image-v1');
+      expect(creatorSession.remoteFeatures).not.toContain('video-call-v1');
+      expect(joinerSession.remoteFeatures).not.toContain('video-call-v1');
 
       const creatorChat = new ChatSession(creatorSession, creatorStore);
       const joinerChat = new ChatSession(joinerSession, joinerStore);
+      expect(creatorChat.supportsVideoCalls).toBe(false);
+      expect(joinerChat.supportsVideoCalls).toBe(false);
       const creatorReceived = Promise.withResolvers<undefined>();
       const joinerDelivered = Promise.withResolvers<undefined>();
       const joinerReplyReceived = Promise.withResolvers<undefined>();

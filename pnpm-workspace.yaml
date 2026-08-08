@@ -3,6 +3,19 @@ packages:
   - landing
   - relay
 
+supportedArchitectures:
+  os:
+    - darwin
+    - linux
+  cpu:
+    - arm64
+    - x64
+  libc:
+    - glibc
+    - musl
+
+injectWorkspacePackages: true
+
 allowBuilds:
   '@signalapp/libsignal-client': true
   better-sqlite3: true

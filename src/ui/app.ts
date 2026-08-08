@@ -18,6 +18,10 @@ import {
 } from '@earendil-works/pi-tui';
 
 import { ChatSession, type ChatEvent } from '../chat/session.js';
+import {
+  CallController,
+  type CallControllerEvent,
+} from '../call/controller.js';
 import { APP_TAG, APP_VERSION } from '../core/version.js';
 import { loadImageFile, type PreparedImage } from '../image/image.js';
 import {
@@ -35,7 +39,7 @@ import {
 } from '../storage/local-store.js';
 import { resolveProfileDataDirectory } from '../storage/paths.js';
 import { obtainPassphrase } from '../storage/unlock.js';
-import { checkForUpdate, installLatestPackage } from '../update/client.js';
+import { checkForUpdate, installLatestRelease } from '../update/client.js';
 import { ansi } from './ansi.js';
 import {
   createUiAutocompleteProvider,
@@ -67,6 +71,39 @@ const CHAT_IMAGE_MAX_HEIGHT = 12;
 const PENDING_IMAGE_MAX_WIDTH = 36;
 const PENDING_IMAGE_MAX_HEIGHT = 9;
 const REPLY_PICKER_MAX_VISIBLE = 8;
+
+class IncomingCallPrompt implements Component {
+  public constructor(
+    readonly peerFingerprint: string,
+    readonly onAccept: () => void,
+    readonly onDecline: () => void,
+  ) {}
+
+  public render(width: number): string[] {
+    void width;
+    return [
+      ansi.bold(ansi.green('Incoming encrypted video call')),
+      '',
+      `${ansi.dim('peer')} ${this.peerFingerprint}`,
+      ansi.dim('Signal authenticated • mandatory TURN relay'),
+      ansi.dim('The peer will not receive your IP address.'),
+      '',
+      `${ansi.green('Enter')} accept   ${ansi.yellow('Esc')} decline`,
+    ];
+  }
+
+  public handleInput(data: string): void {
+    if (matchesKey(data, Key.enter) || matchesKey(data, Key.return)) {
+      this.onAccept();
+    } else if (matchesKey(data, Key.escape)) {
+      this.onDecline();
+    }
+  }
+
+  public invalidate(): void {
+    // This prompt has no cached layout state to invalidate.
+  }
+}
 
 class ReplyPicker implements Component {
   readonly #list: SelectList;
@@ -149,14 +186,16 @@ const HELP_TEXT = `${ansi.bold('Commands')}
 ${ansi.cyan('/new')}          Create an Internet chat
 ${ansi.cyan('/new-local')}    Create a direct LAN chat
 ${ansi.cyan('/join <code>')}  Join using an invite code
+${ansi.cyan('/call')}         Start an encrypted video call
+${ansi.cyan('/hangup')}       End the current video call
 ${ansi.cyan('/update')}       Install the latest p2pchat version
 ${ansi.cyan('/clear')}        Clear this activity panel
 ${ansi.cyan('/source')}       Show the exact release source
 ${ansi.cyan('/license')}      Show licensing information
 ${ansi.cyan('/quit')}         Exit safely`;
 
-const SOURCE_URL = `https://github.com/AshrithSathu/p2pchat/tree/${APP_TAG}`;
-const LICENSE_URL = `https://github.com/AshrithSathu/p2pchat/blob/${APP_TAG}/LICENSE`;
+const SOURCE_URL = `https://p2pchat-relay.sathuashrith.com/downloads/p2pchat-${APP_TAG}-source.tar.gz`;
+const LICENSE_URL = SOURCE_URL;
 
 interface LayoutHandle {
   readonly root: Container;
@@ -191,6 +230,9 @@ function createLayout(
   });
   let currentSession: AuthenticatedSession | null = null;
   let currentChat: ChatSession | null = null;
+  let callController: CallController | null = null;
+  let callStatusText: string | null = null;
+  let incomingCallOverlay: OverlayHandle | null = null;
   let pendingInvite: InviteHandle | null = null;
   let disconnectedReason: string | null = null;
   let replyToMessageId: string | null = null;
@@ -356,10 +398,14 @@ function createLayout(
             disconnectedReason,
             160,
           )}`;
+    const callLine =
+      callStatusText === null
+        ? ''
+        : `\n${ansi.cyan('● video')}  ${sanitizeTerminalText(callStatusText, 180)}`;
     activity.clear();
     activity.addChild(
       new Text(
-        `${connectionLine}\n` +
+        `${connectionLine}${callLine}\n` +
           `${ansi.dim(`peer ${currentSession.peer.fingerprint.slice(0, 24)}…`)}\n\n` +
           `${ansi.bold('Safety number')}  ${ansi.cyan(currentSession.safetyNumber)}\n` +
           ansi.yellow('Compare it with your peer before sharing secrets.'),
@@ -397,8 +443,71 @@ function createLayout(
   };
 
   const onChatEvent = (event: ChatEvent): void => {
+    if (event.kind === 'call-signal') {
+      void callController?.receive(event.frame).catch((error: unknown) => {
+        const message =
+          error instanceof Error
+            ? error.message
+            : 'Video call signaling failed';
+        callStatusText = message;
+        renderChat();
+      });
+      return;
+    }
     if (event.kind === 'disconnected') {
       disconnectedReason = event.reason;
+    }
+    renderChat();
+  };
+
+  const closeIncomingCallPrompt = (): void => {
+    incomingCallOverlay?.hide();
+    incomingCallOverlay = null;
+    tui.setFocus(editor);
+    tui.requestRender();
+  };
+
+  const onCallControllerEvent = (event: CallControllerEvent): void => {
+    if (event.kind === 'incoming') {
+      if (currentSession === null || callController === null) {
+        return;
+      }
+      replyPickerOverlay?.hide();
+      replyPickerOverlay = null;
+      updateNoticeOverlay?.hide();
+      updateNoticeOverlay = null;
+      const prompt = new IncomingCallPrompt(
+        `${currentSession.peer.fingerprint.slice(0, 24)}…`,
+        () => {
+          closeIncomingCallPrompt();
+          void callController?.accept().catch((error: unknown) => {
+            callStatusText =
+              error instanceof Error ? error.message : 'Unable to accept call';
+            renderChat();
+          });
+        },
+        () => {
+          closeIncomingCallPrompt();
+          void callController?.decline().catch((error: unknown) => {
+            callStatusText =
+              error instanceof Error ? error.message : 'Unable to decline call';
+            renderChat();
+          });
+        },
+      );
+      incomingCallOverlay = tui.showOverlay(prompt, {
+        width: '58%',
+        minWidth: 48,
+        maxHeight: 12,
+        anchor: 'center',
+        margin: 2,
+      });
+      tui.requestRender();
+      return;
+    }
+    callStatusText = event.message;
+    if (event.state === 'ended') {
+      closeIncomingCallPrompt();
     }
     renderChat();
   };
@@ -522,6 +631,15 @@ function createLayout(
     disconnectedReason = null;
     replyToMessageId = null;
     currentChat = new ChatSession(session, store);
+    callController =
+      session.transport === 'relay' && relay !== null
+        ? new CallController(
+            currentChat,
+            relay,
+            `${session.peer.fingerprint.slice(0, 24)}…`,
+            onCallControllerEvent,
+          )
+        : null;
     renderPendingReply();
     renderChat();
     void currentChat.run(onChatEvent).catch(() => undefined);
@@ -529,6 +647,15 @@ function createLayout(
 
   const showAction = async (action: UiAction): Promise<void> => {
     switch (action.kind) {
+      case 'call':
+        if (currentChat === null || callController === null) {
+          setActivityText(
+            `${ansi.yellow('Private relay chat required')}\nConnect using an Internet invite before starting a video call.`,
+          );
+          break;
+        }
+        await callController.start();
+        break;
       case 'clear':
         if (currentChat === null) {
           showWelcome();
@@ -543,6 +670,15 @@ function createLayout(
         return;
       case 'help':
         setActivityText(HELP_TEXT);
+        break;
+      case 'hangup':
+        if (!callController?.hasCall) {
+          setActivityText(
+            `${ansi.yellow('No active video call')}\nStart one with ${ansi.cyan('/call')}.`,
+          );
+          break;
+        }
+        await callController.hangUp();
         break;
       case 'join':
         if (currentChat !== null) {
@@ -657,14 +793,14 @@ function createLayout(
       case 'update': {
         if (updateBusy) {
           setActivityText(
-            `${ansi.yellow('Update already running')}\nWait for npm to finish.`,
+            `${ansi.yellow('Update already running')}\nWait for the installer to finish.`,
           );
           break;
         }
         updateBusy = true;
         closeUpdateNotice();
         setActivityText(
-          `${ansi.yellow('Checking for updates…')}\nContacting the npm registry.`,
+          `${ansi.yellow('Checking for updates…')}\nContacting the p2pchat release service.`,
         );
         tui.requestRender();
         try {
@@ -681,7 +817,7 @@ function createLayout(
               ansi.dim('Your profile and encrypted database are not changed.'),
           );
           tui.requestRender();
-          await installLatestPackage();
+          await installLatestRelease();
           availableUpdateVersion = null;
           setActivityText(
             `${ansi.green(`● p2pchat v${status.latestVersion} installed`)}\n\n` +
@@ -944,9 +1080,11 @@ function createLayout(
       removeQuitInputListener();
       removeImageInputListener();
       replyPickerOverlay?.hide();
+      incomingCallOverlay?.hide();
       updateNoticeOverlay?.hide();
       pendingImage?.bytes.fill(0);
       pendingInvite?.cancel();
+      await callController?.close();
       await currentChat?.close();
     },
   };
