@@ -239,8 +239,8 @@ importers:
         specifier: ^13.0.3
         version: 13.0.3
       '@signalapp/libsignal-client':
-        specifier: 0.99.3
-        version: 0.99.3
+        specifier: 0.99.4
+        version: 0.99.4
       better-sqlite3:
         specifier: ^13.0.2
         version: 13.0.2
@@ -1039,8 +1039,8 @@ packages:
   '@rolldown/pluginutils@1.0.1':
     resolution: {integrity: sha512-2j9bGt5Jh8hj+vPtgzPtl72j0yRxHAyumoo6TNfAjsLB04UtpSvPbPcDcBMxz7n+9CYB0c1GxQFxYRg2jimqGw==}
 
-  '@signalapp/libsignal-client@0.99.3':
-    resolution: {integrity: sha512-P5EMVtAvp3RsaT4ot9AVSEXGvhOh6Fk0IA5GQo4WpGHFLMH78UJ9njVWmqBVYCGPDg35zu3WxryMk+tanpMu8A==}
+  '@signalapp/libsignal-client@0.99.4':
+    resolution: {integrity: sha512-2vzPC2sRFJhJZpZjqMw++nThSQPHYKg//Hru9UpObeng5WoXJSLHATckFLONvOxSPm554Ln+ODY0xtIQc/6fKA==}
 
   '@sindresorhus/fnv1a@3.1.0':
     resolution: {integrity: sha512-KV321z5m/0nuAg83W1dPLy85HpHDk7Sdi4fJbwvacWsEhAh+rZUW4ZfGcXmUIvjZg4ss2bcwNlRhJ7GBEUG08w==}
@@ -1630,8 +1630,8 @@ packages:
   multiformats@14.0.5:
     resolution: {integrity: sha512-vbIm83F2yZ1pWJGS0yl0ysracIvv56LtbrIyiIQHoLdYDJOMoLfVFsXhh9DUH4SFdkdkFhucyWniihsNzVEjkQ==}
 
-  nanoid@3.3.17:
-    resolution: {integrity: sha512-xQLf0A3HOMlgHq0n247/LRuAOYmB7dXJ/DvAxGvsSBij45XtBSmQycu+F8ODbHwns/XyFZagyL1+J0Offw1E0g==}
+  nanoid@3.3.18:
+    resolution: {integrity: sha512-DTg4MJbGMWkfi6VZFdNt2/caMbQy4Ou+Op/hJQvGEWcnVfoA1QA+xzRKAzw9jD6+GVOOeYr/mIcuDSdug6F6+w==}
     engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
     hasBin: true
 
@@ -2645,7 +2645,7 @@ snapshots:
 
   '@rolldown/pluginutils@1.0.1': {}
 
-  '@signalapp/libsignal-client@0.99.3':
+  '@signalapp/libsignal-client@0.99.4':
     dependencies:
       node-gyp-build: 4.8.4
       type-fest: 4.41.0
@@ -3313,7 +3313,7 @@ snapshots:
 
   multiformats@14.0.5: {}
 
-  nanoid@3.3.17: {}
+  nanoid@3.3.18: {}
 
   natural-compare@1.4.0: {}
 
@@ -3373,7 +3373,7 @@ snapshots:
 
   postcss@8.5.26:
     dependencies:
-      nanoid: 3.3.17
+      nanoid: 3.3.18
       picocolors: 1.1.1
       source-map-js: 1.2.1
 
