@@ -2,6 +2,12 @@
 
 All notable changes to p2pchat are documented here.
 
+## [0.8.4](https://github.com/AshrithSathu/p2pchat/compare/v0.8.3...v0.8.4) (2026-08-17)
+
+### Miscellaneous Chores
+
+- trigger v0.8.4 release ([#39](https://github.com/AshrithSathu/p2pchat/issues/39)) ([5923b45](https://github.com/AshrithSathu/p2pchat/commit/5923b457936fdb9b76ced3672a7060aae92c929f))
+
 ## [0.8.3](https://github.com/AshrithSathu/p2pchat/compare/v0.8.2...v0.8.3) (2026-08-08)
 
 ### Bug Fixes
