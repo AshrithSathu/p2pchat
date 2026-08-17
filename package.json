@@ -60,7 +60,7 @@
     "@libp2p/utils": "^7.3.2",
     "@mariozechner/clipboard": "0.3.9",
     "@multiformats/multiaddr": "^13.0.3",
-    "@signalapp/libsignal-client": "0.99.3",
+    "@signalapp/libsignal-client": "0.100.0",
     "better-sqlite3": "^13.0.2",
     "libp2p": "^3.3.8",
     "zod": "^4.4.3"
