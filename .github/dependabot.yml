@@ -2,6 +2,7 @@ version: 2
 updates:
   - package-ecosystem: npm
     directory: /
+    target-branch: develop
     schedule:
       interval: weekly
       day: monday
@@ -10,6 +11,9 @@ updates:
     open-pull-requests-limit: 10
     commit-message:
       prefix: 'deps'
+    groups:
+      development-tooling:
+        dependency-type: development
 
   - package-ecosystem: github-actions
     directory: /
