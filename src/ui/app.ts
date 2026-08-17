@@ -9,12 +9,13 @@ import {
   SelectList,
   Spacer,
   Text,
-  TUI,
+  TuiMainScreen,
   type Component,
   type EditorTheme,
   type OverlayHandle,
   type SelectItem,
   type SelectListTheme,
+  type TUI,
 } from '@earendil-works/pi-tui';
 
 import { ChatSession, type ChatEvent } from '../chat/session.js';
@@ -1125,7 +1126,7 @@ export async function runTerminalApp(profileName = 'default'): Promise<void> {
         ? null
         : new RelayService(store, { endpoint: relayEndpoint });
     const terminal = new ProcessTerminal();
-    const tui = new TUI(terminal);
+    const tui = new TuiMainScreen(terminal);
     const completion = Promise.withResolvers<undefined>();
     const updateCheckController = new AbortController();
     let finished = false;
