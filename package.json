@@ -62,7 +62,7 @@
     "@multiformats/multiaddr": "^13.0.3",
     "@signalapp/libsignal-client": "0.100.0",
     "better-sqlite3": "^13.0.3",
-    "libp2p": "^3.3.8",
+    "libp2p": "^3.3.9",
     "zod": "^4.4.3"
   },
   "repository": {
