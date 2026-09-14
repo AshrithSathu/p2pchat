@@ -63,7 +63,7 @@
     "@signalapp/libsignal-client": "0.100.0",
     "better-sqlite3": "^13.0.3",
     "libp2p": "^3.3.8",
-    "zod": "^4.4.3"
+    "zod": "^4.6.2"
   },
   "repository": {
     "type": "git",
